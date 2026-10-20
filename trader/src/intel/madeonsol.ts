@@ -5,6 +5,8 @@ import { log, registerSecret, scrubSecrets } from "../lib/log.js";
 
 export const PROVIDER = "madeonsol";
 const SOURCE = "intel";
+/** The dashboard's override of where the daily job stops (kv), set until changed back. */
+export const STOP_OVERRIDE_KEY = "override.madeonsol_stop_pct";
 
 export type Fetch = (url: string, init: { method: string; headers: Record<string, string>; body?: string; signal: AbortSignal }) => Promise<{
   ok: boolean;
@@ -42,8 +44,15 @@ export class MadeOnSol {
     return Math.max(r.n, r.remote ?? 0);
   }
 
+  /** Where the job stops: config stop_pct, or the dashboard's override (1-100%; 100% = all of MadeOnSol's daily requests). */
+  get stopPct(): number {
+    const row = this.db.prepare("SELECT value FROM kv WHERE key = ?").get(STOP_OVERRIDE_KEY) as { value: string } | undefined;
+    const v = row ? Number(row.value) : NaN;
+    return Number.isFinite(v) && v >= 1 && v <= 100 ? v : this.cfg.stop_pct;
+  }
+
   get stopAt(): number {
-    return Math.floor((this.cfg.daily_requests * this.cfg.stop_pct) / 100);
+    return Math.floor((this.cfg.daily_requests * this.stopPct) / 100);
   }
 
   canRequest(): boolean {
@@ -100,7 +109,7 @@ export class MadeOnSol {
   private warnBudget(): void {
     const used = this.usedToday();
     const limit = this.cfg.daily_requests;
-    const pct = used >= limit ? 100 : used >= this.stopAt ? this.cfg.stop_pct : (used / limit) * 100 >= this.cfg.warn_pct ? this.cfg.warn_pct : 0;
+    const pct = used >= limit ? 100 : used >= this.stopAt ? this.stopPct : (used / limit) * 100 >= this.cfg.warn_pct ? this.cfg.warn_pct : 0;
     if (!pct) return;
     const day = new Date(this.now()).toISOString().slice(0, 10);
     const key = "madeonsol.warned";

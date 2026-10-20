@@ -1,16 +1,21 @@
-"""Read-only live dashboard: http://localhost:8080
+"""Live dashboard: http://localhost:8080
 
 One poller thread owns the (read-only) database connection, keeps the latest snapshot and the
-recent feed in memory, and pushes changes to every browser over Server-Sent Events. HTTP handlers
-never touch the database. Only GET is served; there is no endpoint that changes anything.
+recent feed in memory, and pushes changes to every browser over Server-Sent Events. Everything is
+read-only except POST /api/settings, which can change two daily limits (settings.py) and nothing
+else. It answers only this dashboard's own page: the Host must be this machine, a cross-site
+Origin is refused, and the request must carry the page's secret token in a header (another site
+in your browser can neither read that token nor send that header).
 
 Usage: python dashboard/server.py [--host 127.0.0.1] [--port 8080]
 """
 from __future__ import annotations
 
 import argparse
+import hmac
 import json
 import queue
+import secrets
 import sys
 import threading
 import time
@@ -20,6 +25,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import data  # noqa: E402
+import settings  # noqa: E402
 
 STATIC = Path(__file__).resolve().parent / "static"
 FILES = {"/": ("index.html", "text/html; charset=utf-8"), "/app.js": ("app.js", "text/javascript; charset=utf-8"),
@@ -35,6 +41,7 @@ class Hub:
     """Latest state + subscriber queues. The poller writes, request threads read."""
 
     def __init__(self):
+        self.token = secrets.token_urlsafe(32)  # proves a settings change comes from this dashboard's own page
         self.lock = threading.Lock()
         self.clients: set[queue.Queue] = set()
         self.snapshot: dict | None = None
@@ -44,7 +51,8 @@ class Hub:
 
     def state(self) -> str:
         with self.lock:
-            return json.dumps({"snapshot": self.snapshot, "feed": self.feed.all() if self.feed else [], "error": self.error})
+            return json.dumps({"snapshot": self.snapshot, "feed": self.feed.all() if self.feed else [], "error": self.error,
+                               "control_token": self.token})
 
     def subscribe(self) -> tuple[queue.Queue, str]:
         q: queue.Queue = queue.Queue(maxsize=500)
@@ -142,8 +150,38 @@ def make_handler(hub: Hub):
         def do_HEAD(self):
             self.send(405, b"", "text/plain")
 
-        # Read-only: refuse every method that could carry a change.
-        do_POST = do_PUT = do_PATCH = do_DELETE = do_HEAD
+        # Read-only, except the two limits in settings.py.
+        do_PUT = do_PATCH = do_DELETE = do_HEAD
+
+        def do_POST(self):
+            if self.path.split("?", 1)[0] != "/api/settings":
+                return self.send(405, b"", "text/plain")
+            port = self.server.server_address[1]
+            hosts = {f"localhost:{port}", f"127.0.0.1:{port}"}
+            origin = self.headers.get("Origin")
+            if self.headers.get("Host") not in hosts or (origin and origin not in {f"http://{h}" for h in hosts}):
+                return self.reply(403, {"error": "only this dashboard can change settings"})
+            if not hmac.compare_digest(self.headers.get("X-Dashboard-Token", ""), hub.token):
+                return self.reply(403, {"error": "reload the dashboard page and try again"})
+            length = int(self.headers.get("Content-Length") or 0)
+            if not 0 < length <= 1024 or not (self.headers.get("Content-Type") or "").startswith("application/json"):
+                return self.reply(400, {"error": "bad request"})
+            try:
+                body = json.loads(self.rfile.read(length))
+                snap = hub.snapshot or {}
+                guard = ((snap.get("data") or {}).get("helius_monthly_guard_mb"))
+                limit = ((snap.get("madeonsol") or {}).get("limit"))
+                res = settings.apply(data.db_path(), str(body.get("setting")), body.get("value"), guard, limit)
+            except (ValueError, AttributeError) as e:
+                return self.reply(400, {"error": str(e)})
+            except Exception as e:  # database busy etc.
+                log(f"settings change failed: {e}")
+                return self.reply(503, {"error": "could not save, try again"})
+            log(f"setting changed from the dashboard: {res['setting']} = {res['value']:g}" + ("" if res["overridden"] else " (back to normal)"))
+            self.reply(200, res)
+
+        def reply(self, code: int, obj: dict):
+            self.send(code, json.dumps(obj).encode(), "application/json")
 
         def send(self, code: int, body: bytes, ctype: str):
             self.send_response(code)

@@ -38,10 +38,12 @@ let filter = "all";
 const expanded = new Set();
 const fresh = new Set();
 let lastMsg = 0;
+let token = null; // proves a settings change comes from this page (sent as a header)
 
 // ---------------------------------------------------------------- connection
 
 function applyState(d) {
+  token = d.control_token || token;
   feed.clear();
   addFeed(d.feed, false);
   problem(d.error);
@@ -80,6 +82,65 @@ function render(s) {
   renderLatency(s.latency);
   renderLearner(s.learner);
   if (s.madeonsol) renderMadeOnSol(s.madeonsol);
+  renderControls(s);
+}
+
+// ---------------------------------------------------------------- the two limits you can change
+
+function renderControls(s) {
+  const st = s.settings || {};
+  if (st.helius_daily_mb_cap) {
+    const c = st.helius_daily_mb_cap, guard = s.data.helius_monthly_guard_mb;
+    control($("cap-control"), "helius_daily_mb_cap", "Daily data limit", "MB", c,
+      `Normal: ${int(c.default)} MB.${isNum(guard) ? ` Whatever you set, today the bot uses at most <b>${int(guard)} MB</b>, so the month's free data can't run out.` : ""}
+       ${c.overridden ? `<br><span class="flag-inline">raised on the dashboard</span>` : ""}`);
+  }
+  if (st.madeonsol_stop_pct && s.madeonsol) {
+    const c = st.madeonsol_stop_pct, lim = s.madeonsol.limit;
+    control($("mos-control"), "madeonsol_stop_pct", "Daily job stops at", "% of requests", c,
+      `= ${int((lim * c.value) / 100)} of ${int(lim)} requests a day. Normal: ${c.default}%. MadeOnSol never allows more than ${int(lim)}.
+       ${c.overridden ? `<br><span class="flag-inline">changed on the dashboard</span>` : ""}`);
+  }
+}
+
+function control(el, name, label, unit, c, note) {
+  if (!el.dataset.built) {
+    el.innerHTML = `<h3>${label}</h3><div class="ctl-row"><input type="number" aria-label="${label}"> <span class="muted">${unit}</span>
+      <button class="save">Save</button><button class="reset">Back to normal</button></div><div class="ctl-note muted"></div><div class="ctl-msg" role="status"></div>`;
+    el.dataset.built = "1";
+    const input = el.querySelector("input");
+    input.addEventListener("input", () => (input.dataset.dirty = "1"));
+    el.querySelector(".save").addEventListener("click", () => saveSetting(el, name, label, unit, Number(input.value)));
+    el.querySelector(".reset").addEventListener("click", () => saveSetting(el, name, label, unit, null));
+  }
+  const input = el.querySelector("input");
+  input.min = c.min;
+  input.max = c.max;
+  input.step = name === "helius_daily_mb_cap" ? 100 : 1;
+  if (document.activeElement !== input && !input.dataset.dirty) input.value = c.value;
+  el.querySelector(".ctl-note").innerHTML = note;
+  el.querySelector(".reset").disabled = !c.overridden;
+}
+
+async function saveSetting(el, name, label, unit, value) {
+  const msg = el.querySelector(".ctl-msg");
+  if (value !== null && !(value > 0)) { msg.textContent = "Type a number first."; return; }
+  if (!confirm(value === null ? `Set "${label}" back to normal?` : `Change "${label}" to ${value} ${unit}?`)) return;
+  msg.textContent = "Saving…";
+  try {
+    const res = await fetch("/api/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Dashboard-Token": token || "" },
+      body: JSON.stringify({ setting: name, value }),
+    });
+    const body = await res.json();
+    if (!res.ok) { msg.textContent = `Not saved: ${body.error || res.status}`; return; }
+    delete el.querySelector("input").dataset.dirty;
+    el.querySelector("input").value = body.value;
+    msg.textContent = `Saved: ${body.value} ${unit}${body.overridden ? "" : " (normal)"}. The bot uses it within a few seconds, and you get a Telegram message.`;
+  } catch {
+    msg.textContent = "Not saved: the dashboard can't be reached.";
+  }
 }
 
 function renderMadeOnSol(m) {

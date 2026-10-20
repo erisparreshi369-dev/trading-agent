@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { basename } from "node:path";
 import { log, scrubSecrets } from "../lib/log.js";
-import { commandFailed } from "./messages.js";
+import { M } from "./voice.js";
 
 export interface Command {
   name: string; // without the slash, lowercased, @botname stripped
@@ -105,7 +105,7 @@ export class Telegram {
           };
           const reply = await onCommand(cmd).catch((err) => {
             log.error({ err: String(err), cmd: cmd.name }, "telegram command failed");
-            return commandFailed();
+            return M.commandFailed();
           });
           await this.send(reply);
         }

@@ -13,7 +13,7 @@
     <span id="mode" class="mode mode-unknown">…</span>
     <div>
       <h1>trading-agent</h1>
-      <div class="sub">read-only · <span id="conn" class="conn">connecting…</span> · <span id="clock"></span></div>
+      <div class="sub">view only, except 2 daily limits · <span id="conn" class="conn">connecting…</span> · <span id="clock"></span></div>
     </div>
   </div>
   <div id="flags" class="flags"></div>
@@ -49,6 +49,7 @@
     <section class="panel" aria-labelledby="h-data">
       <h2 id="h-data">Data collection</h2>
       <div id="data"></div>
+      <div id="cap-control" class="control"></div>
     </section>
 
     <section class="panel span2" aria-labelledby="h-wallets">
@@ -68,6 +69,7 @@
     <section class="panel" aria-labelledby="h-mos">
       <h2 id="h-mos">MadeOnSol <small>optional helper, daily job only</small></h2>
       <div id="madeonsol"></div>
+      <div id="mos-control" class="control"></div>
     </section>
 
     <section class="panel" aria-labelledby="h-learn">

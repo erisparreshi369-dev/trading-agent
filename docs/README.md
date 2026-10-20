@@ -148,6 +148,12 @@ service that died without a clean shutdown (kill, OOM, power loss) with a per-da
 systemd gave up on (crash loop) or a failed timer job, sent by `curl` so it works even when the
 notifier is down; daily summary 00:05 UTC; weekly report as a file.
 **Commands**: `/status`, `/pnl`, `/stop` (kill switch), accepted only from the owner's chat.
+**Voice**: `notifier.voice: genz` (owner's choice, 2026-10-20) or `plain`. Both live side by side:
+`notifier/messages.ts` (plain) and `notifier/messages-genz.ts` (Gen Z, same facts and steps; the
+compiler checks it has every message). `notifier/voice.ts` holds the one switch every part reads, so
+trade texts, summaries and the fallback "sorry" all change together. The same house rules are
+tested on both voices (no jargon, short, SOL explained, 🚨 messages give the exact command).
+Proofread: `cd trader && npx tsx test/message-samples.ts --genz`.
 
 **MadeOnSol** (optional, `trader/src/intel/`, key `MADEONSOL_API_KEY`): a helper for a daily job
 only, never called while deciding a trade. Free plan: 200 requests/day (60/min); a batch of up to
@@ -170,7 +176,13 @@ every log line, message and the dashboard.
 feed (launches, tracked-wallet trades, every signal with its reasons, paper fills, errors and
 restarts), money and equity curve, positions, closed trades, wallets (and why dropped), risk,
 data collection, latency, learner. It opens the database `mode=ro` + `query_only`, never imports
-trader code or reads `.env`, serves GET only and binds to loopback only (it has no login). One
+trader code or reads `.env`, and binds to loopback only (it has no login). Its only write is
+`dashboard/settings.py`: two limits you can change on the page, until you change them back (the
+Helius daily data cap and where the MadeOnSol job stops). `POST /api/settings` accepts only those
+two, with a valid range, and only from the dashboard's own page (Host must be this machine,
+cross-site Origin refused, a per-start secret token required in a header); each change is saved in
+`kv` (`override.*`) and announced on Telegram. Whatever the daily cap, the collector's monthly
+guard keeps any 31 days under 90% of the plan's monthly credits. One
 poller thread reads SQLite every second and pushes to browsers over Server-Sent Events. Risk limits
 are parsed from `limits.ts`, paper costs from `config.yaml`, so it shows what the trader enforces.
 On a VPS: `ssh -L 8080:localhost:8080 user@host`, then open http://localhost:8080.

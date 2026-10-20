@@ -36,7 +36,7 @@ export interface Ctx {
 export type Mood = "good" | "careful" | "bad" | "normal";
 const MOOD: Record<Mood, string> = { good: "✅ Good", careful: "⚠️ Be careful", bad: "🚨 Bad", normal: "😐 Normal" };
 
-export const NOTHING = "Nothing, everything is fine.";
+export const NOTHING: string = "Nothing, everything is fine.";
 export const todo = (step: string) => step;
 
 type Line = string | false | 0 | null | undefined;
@@ -620,6 +620,21 @@ export function dataBudget(c: Ctx, d: { pct: number; mbToday: number; capMb: num
   });
 }
 
+/** A limit was changed on the dashboard (or set back to normal). */
+export function settingChanged(c: Ctx, d: { setting: string; from: number; to: number; reset: boolean; guardMb: number | null; limit: number | null }): string {
+  const data = d.setting === "helius_daily_mb_cap";
+  const what = data ? "the daily market-data limit" : "where the daily MadeOnSol job stops";
+  const value = (x: number) => (data ? `${Math.round(x)} MB` : `${Math.round(x)}% of its ${d.limit ?? 200} requests`);
+  return render({
+    title: "SETTINGS · A daily limit was changed",
+    happened: d.reset ? `You set ${what} back to normal: ${value(d.to)}.` : `You changed ${what} from ${value(d.from)} to ${value(d.to)} on the dashboard.`,
+    mood: "normal",
+    why: data ? "More data lets the bot follow the market longer each day." : "The helper may now ask MadeOnSol more often each day.",
+    extra: [data && d.guardMb !== null && `It still never uses up the month's free data: today it can use at most ${Math.round(d.guardMb)} MB.`],
+    todo: d.reset ? NOTHING : "Nothing. To undo it, change it back on the dashboard.",
+  });
+}
+
 /** The optional MadeOnSol helper used 70% / 90% / all of its free requests for today. Trading never waits for it. */
 export function helperBudget(c: Ctx, d: { pct: number; used: number; limit: number }): string {
   const why = d.pct >= 100 ? "No requests to MadeOnSol are left for today."
@@ -834,6 +849,8 @@ const EXPLAINERS: Explainer[] = [
     example: "Like a car with a warning light on. It still drives, but you should check it." },
   { match: /DATA ·/, simple: () => "This is about the market information the bot reads to trade.",
     example: "Like a weather app with no internet: it cannot show the weather." },
+  { match: /^SETTINGS/, simple: () => "Someone changed one of the bot's daily limits on the dashboard. The message says which, and how to undo it.",
+    example: "Like turning up the volume: louder now, and you can turn it back down any time." },
   { match: /DATA HELPER/, simple: () => "MadeOnSol is an extra helper that tells us how a coin's creator did before. We may ask it a few times a day for free.",
     example: "Like a free library card: a few books a day. When they are used up, you come back tomorrow." },
   { match: /EMERGENCY STOP/, simple: () => "All trading is stopped. The bot sold everything and buys nothing new.",
@@ -1206,4 +1223,4 @@ export function weeklyReport(c: Ctx, r: ReportFacts, attached: boolean): string 
   });
 }
 
-export const weeklyFileCaption = "WEEKLY REPORT · the full report as a file (with tables)";
+export const weeklyFileCaption: string = "WEEKLY REPORT · the full report as a file (with tables)";

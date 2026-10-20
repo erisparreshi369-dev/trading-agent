@@ -6,7 +6,7 @@ import { log } from "../lib/log.js";
 import { ReconnectingWs } from "../lib/reconnecting-ws.js";
 import { decodeAmmEvent, PUMPSWAP_PROGRAM, type AmmTradeEvent } from "./amm-events.js";
 import { BarAggregator } from "./bars.js";
-import { capEta, firehoseAllowed, followsWallets, keepWatch, modeFor, stepReached, UsageRate, type DataMode } from "./budget.js";
+import { capEta, dailyCap, HELIUS_SOURCES, firehoseAllowed, followsWallets, keepWatch, modeFor, stepReached, UsageRate, type DataMode } from "./budget.js";
 import { HolderChecker } from "./holder-checks.js";
 import { bondingCurve, canonicalPool } from "./pools.js";
 import { DEFAULT_PUBKEY, eventsFromLogs, isSolQuoted, priceSol, PUMP_PROGRAM, WSOL_MINT, type PumpEvent } from "./pump-events.js";
@@ -15,7 +15,6 @@ import { TargetedSubscriptions, type WatchTarget } from "./targeted.js";
 
 export const SERVICE = "collector";
 const PUMPPORTAL_URL = "wss://pumpportal.fun/api/data";
-const HELIUS_SOURCES = ["helius", "firehose", "targeted"];
 
 export interface CollectorDeps {
   db: DB;
@@ -51,7 +50,8 @@ export class Collector {
   private mode: DataMode = "normal";
   private modeSaved = false; // a mode left in kv by a previous run must be overwritten at start
   private rate: UsageRate;
-  private warned = { day: "", step: 0 };
+  private warned = { day: "", step: 0, cap: 0 };
+  private cap = { capMb: 0, chosenMb: 0, overridden: false, monthlyGuardMb: 0 };
   private budgetGap = false;
   private trackedWallets = new Set<string>();
   private poolToMint = new Map<string, string>();
@@ -88,7 +88,7 @@ export class Collector {
       `SELECT COALESCE(SUM(bytes), 0) b FROM stream_usage WHERE day = ? AND source IN (${HELIUS_SOURCES.map(() => "?").join(",")})`,
     ).get(this.usageDay, ...HELIUS_SOURCES) as { b: number }).b;
     const warned = (db.prepare("SELECT value FROM kv WHERE key = 'collector.budget_warned'").get() as { value: string } | undefined)?.value.split(":");
-    if (warned) this.warned = { day: warned[0]!, step: Number(warned[1]) || 0 };
+    if (warned) this.warned = { day: warned[0]!, step: Number(warned[1]) || 0, cap: Number(warned[2]) || cfg.helius.daily_mb_cap };
 
     const key = this.d.heliusApiKey ?? "";
     this.setupProviders();
@@ -210,7 +210,7 @@ export class Collector {
   /** Feed budget and "should be busy" into provider health, then let each job re-pick. */
   private observeProviders(): void {
     if (!this.health) return;
-    this.health.budget("helius", (this.heliusBytesToday / 1e6 / this.d.cfg.helius.daily_mb_cap) * 100);
+    this.health.budget("helius", (this.heliusBytesToday / 1e6 / this.capMb) * 100);
     // only the full stream is reliably busy; followed traders can be quiet for minutes
     this.health.expectTraffic("helius", this.firehoseRunning && !!this.firehose?.up);
     for (const r of this.routers) r.evaluate();
@@ -243,7 +243,8 @@ export class Collector {
     if (utcDay(this.now()) !== this.usageDay) this.rollDay();
     const mb = this.heliusBytesToday / 1e6;
     const open = (db.prepare("SELECT count(*) n FROM paper_positions WHERE status IN ('pending', 'open')").get() as { n: number }).n;
-    this.setMode(modeFor(mb, cfg.helius.daily_mb_cap, cfg.helius.steps_pct, open));
+    this.cap = dailyCap(db, cfg.helius, this.now()); // the dashboard may have changed it
+    this.setMode(modeFor(mb, this.capMb, cfg.helius.steps_pct, open));
     this.warnBudget(mb, open);
     const hour = new Date(this.now()).getUTCHours();
     const [h0, h1] = cfg.firehose.hours_utc;
@@ -287,6 +288,11 @@ export class Collector {
     this.observeProviders();
   }
 
+  /** Today's cap in MB (before the first schedule(): the config value). */
+  private get capMb(): number {
+    return this.cap.capMb > 0 || this.cap.chosenMb > 0 ? this.cap.capMb : this.d.cfg.helius.daily_mb_cap;
+  }
+
   private rollDay(): void {
     this.persistUsage();
     this.usageDay = utcDay(this.now());
@@ -306,14 +312,19 @@ export class Collector {
   /** One Telegram warning per step per UTC day (70/85/95% and the cap), with the speed and when we'd run out. */
   private warnBudget(mb: number, openPositions: number): void {
     const { cfg, db } = this.d;
-    const step = stepReached(mb, cfg.helius.daily_mb_cap, cfg.helius.steps_pct);
-    if (step <= (this.warned.day === this.usageDay ? this.warned.step : 0)) return;
-    this.warned = { day: this.usageDay, step };
-    db.prepare("INSERT INTO kv (key, value) VALUES ('collector.budget_warned', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(`${this.usageDay}:${step}`);
+    const step = stepReached(mb, this.capMb, cfg.helius.steps_pct);
+    // a new cap (raised on the dashboard) re-arms the warnings for the rest of the day
+    const sameDay = this.warned.day === this.usageDay && this.warned.cap === this.capMb;
+    if (step <= (sameDay ? this.warned.step : 0)) {
+      if (!sameDay) this.warned = { day: this.usageDay, step: 0, cap: this.capMb };
+      return;
+    }
+    this.warned = { day: this.usageDay, step, cap: this.capMb };
+    db.prepare("INSERT INTO kv (key, value) VALUES ('collector.budget_warned', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(`${this.usageDay}:${step}:${this.capMb}`);
     const now = this.now();
     const mbPerHour = this.rate.mbPerHour(now);
-    const facts = { pct: step, mbToday: Math.round(mb), capMb: cfg.helius.daily_mb_cap, mbPerHour: Math.round(mbPerHour),
-      capAt: capEta(mb, cfg.helius.daily_mb_cap, mbPerHour, now), mode: this.mode, openPositions };
+    const facts = { pct: step, mbToday: Math.round(mb), capMb: this.capMb >= 10 ? Math.round(this.capMb) : this.capMb, mbPerHour: Math.round(mbPerHour),
+      capAt: capEta(mb, this.capMb, mbPerHour, now), mode: this.mode, openPositions };
     if (step === 100) log.error({ alert: "helius_cap", ...facts }, "Helius daily cap reached: following is OFF until 00:00 UTC; open trades are still watched");
     else log.warn({ alert: "helius_budget", ...facts }, `Helius data: ${step}% of today's budget used, ${this.mode} mode`);
   }
@@ -594,8 +605,9 @@ export class Collector {
     this.persistUsage();
     heartbeat(this.d.db, SERVICE, {
       ...this.stats, streams: this.streams, liveTokens: this.bars.size, heliusMbToday: +(this.heliusBytesToday / 1e6).toFixed(1),
-      heliusCapMb: this.d.cfg.helius.daily_mb_cap, heliusMbLastHour: +this.rate.mbLastHour(this.now()).toFixed(1),
-      heliusMbPerHour: +this.rate.mbPerHour(this.now()).toFixed(1), heliusCapAt: capEta(this.heliusBytesToday / 1e6, this.d.cfg.helius.daily_mb_cap,
+      heliusCapMb: Math.round(this.capMb), heliusCapChosenMb: this.cap.chosenMb, heliusCapOverridden: this.cap.overridden,
+      heliusMonthlyGuardMb: Math.round(this.cap.monthlyGuardMb), heliusMbLastHour: +this.rate.mbLastHour(this.now()).toFixed(1),
+      heliusMbPerHour: +this.rate.mbPerHour(this.now()).toFixed(1), heliusCapAt: capEta(this.heliusBytesToday / 1e6, this.capMb,
         this.rate.mbPerHour(this.now()), this.now()), dataMode: this.mode, budgetStepsPct: this.d.cfg.helius.steps_pct, targetedStats: this.targeted?.stats ?? null, trackedWallets: this.trackedWallets.size,
       holderChecks: this.holders?.stats ?? null, rss_mb: Math.round(process.memoryUsage().rss / 1e6),
       providers: this.providerSummary(),

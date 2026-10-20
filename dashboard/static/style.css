@@ -224,3 +224,15 @@ tr.failed td { color: var(--muted); }
   .services { grid-template-columns: minmax(0, 1fr); }
   .mode { font-size: 20px; }
 }
+
+/* ---- the two limits you can change ---- */
+.control { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--grid); }
+.control:empty { display: none; }
+.ctl-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin: 6px 0; }
+.ctl-row input { width: 110px; font: inherit; padding: 4px 6px; border: 1px solid var(--axis); border-radius: 4px; background: var(--surface-2); color: var(--ink); }
+.ctl-row button { font: inherit; font-size: 12px; padding: 4px 10px; border-radius: 4px; border: 1px solid var(--axis); background: var(--surface-2); color: var(--ink); cursor: pointer; }
+.ctl-row button.save { border-color: var(--series); color: var(--series); font-weight: 600; }
+.ctl-row button:disabled { opacity: .4; cursor: default; }
+.ctl-note { font-size: 12px; }
+.ctl-msg { font-size: 12px; margin-top: 4px; min-height: 1em; }
+.flag-inline { color: var(--warning); font-weight: 600; }

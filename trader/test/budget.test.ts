@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { capEta, firehoseAllowed, followsWallets, keepWatch, modeFor, stepReached, UsageRate } from "../src/collector/budget.js";
+import { CAP_OVERRIDE_KEY, capEta, dailyCap, firehoseAllowed, followsWallets, keepWatch, modeFor, stepReached, UsageRate } from "../src/collector/budget.js";
 import { testConfig } from "./helpers.js";
 
 const STEPS = [70, 85, 95] as const;
@@ -8,7 +8,7 @@ const NOW = Date.UTC(2026, 9, 20, 12, 0);
 
 describe("data budget", () => {
   it("ships with 70/85/95% steps and a 1500 MB daily cap", () => {
-    expect(testConfig().collector.helius).toEqual({ daily_mb_cap: 1500, steps_pct: [70, 85, 95] });
+    expect(testConfig().collector.helius).toEqual({ daily_mb_cap: 1500, monthly_credits: 1_000_000, credits_per_mb: 20, stream_share: 0.9, steps_pct: [70, 85, 95] });
   });
 
   it("steps down through lighter modes before the cap", () => {
@@ -85,5 +85,35 @@ describe("the trader respects the data budget", () => {
     }
     mode("essential");
     expect(enter().ok).toBe(true);
+  });
+});
+
+describe("raising the daily cap (dashboard) never uses up the month", () => {
+  const h = testConfig().collector.helius; // 1M credits * 90% / 20 = 45,000 MB per 31 days
+  const day = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+
+  it("config cap by default; the dashboard override when set; a bad override is ignored", async () => {
+    const { memDb } = await import("./helpers.js");
+    const db = memDb();
+    expect(dailyCap(db, h, NOW)).toEqual({ capMb: 1500, chosenMb: 1500, overridden: false, monthlyGuardMb: 45_000 });
+    db.prepare("INSERT INTO kv (key, value) VALUES (?, '4000')").run(CAP_OVERRIDE_KEY);
+    expect(dailyCap(db, h, NOW)).toMatchObject({ capMb: 4000, chosenMb: 4000, overridden: true });
+    db.prepare("UPDATE kv SET value = 'lots' WHERE key = ?").run(CAP_OVERRIDE_KEY);
+    expect(dailyCap(db, h, NOW)).toMatchObject({ capMb: 1500, overridden: false });
+  });
+
+  it("today may use at most the monthly budget minus the previous 30 days, however high the cap", async () => {
+    const { memDb } = await import("./helpers.js");
+    const db = memDb();
+    db.prepare("INSERT INTO kv (key, value) VALUES (?, '1000000')").run(CAP_OVERRIDE_KEY);
+    const use = db.prepare("INSERT INTO stream_usage (day, source, messages, bytes) VALUES (?, ?, 1, ?)");
+    use.run(day(NOW - 86_400_000), "firehose", 30_000e6); // yesterday: 30 GB
+    use.run(day(NOW - 10 * 86_400_000), "targeted", 10_000e6); // 10 days ago: 10 GB
+    use.run(day(NOW - 31 * 86_400_000), "firehose", 40_000e6); // older than the window: not counted
+    use.run(day(NOW - 86_400_000), "pumpportal", 99_000e6); // free, not Helius: not counted
+    use.run(day(NOW), "firehose", 2_000e6); // today's own use is checked against the cap, not here
+    expect(dailyCap(db, h, NOW)).toEqual({ capMb: 5_000, chosenMb: 1_000_000, overridden: true, monthlyGuardMb: 5_000 });
+    use.run(day(NOW - 2 * 86_400_000), "firehose", 9_000e6);
+    expect(dailyCap(db, h, NOW).capMb).toBe(0); // the month's budget is spent: nothing until older days roll out
   });
 });

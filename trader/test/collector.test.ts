@@ -254,7 +254,7 @@ describe("Collector: Helius budget", () => {
     const alerts: Record<string, unknown>[] = [];
     setAlertSink((_lvl, obj) => alerts.push(obj));
     cleanups.push(() => setAlertSink(null));
-    const { db, c, fire, tgt } = await startCollector({ helius: { daily_mb_cap: 0.01, steps_pct: [70, 85, 95] } });
+    const { db, c, fire, tgt } = await startCollector({ helius: { ...testConfig().collector.helius, daily_mb_cap: 0.01 } });
     await until(() => fire.received.length === 1 && tgt.connections === 1);
     for (let i = 0; i < 4; i++) fire.push(notify(`big${i}`, 1, ["x".repeat(1_900)])); // ~76% of 10 kB
     await until(() => c.streams.firehoseOff === "daily budget used", 8_000);
@@ -262,11 +262,11 @@ describe("Collector: Helius budget", () => {
     expect(db.prepare("SELECT reason FROM collector_gaps WHERE source = 'firehose'").get()).toEqual({ reason: "daily budget used" });
     expect(db.prepare("SELECT value FROM kv WHERE key = 'collector.data_mode'").get()).toEqual({ value: "light" });
     expect(alerts).toMatchObject([{ alert: "helius_budget", pct: 70, mode: "light", capMb: 0.01 }]);
-    expect(db.prepare("SELECT value FROM kv WHERE key = 'collector.budget_warned'").get()).toMatchObject({ value: expect.stringMatching(/:70$/) });
+    expect(db.prepare("SELECT value FROM kv WHERE key = 'collector.budget_warned'").get()).toMatchObject({ value: expect.stringMatching(/:70:0.01$/) }); // day:step:cap (a new cap re-arms the warnings)
   }, 10_000);
 
   it("at the cap with nothing open: stops everything Helius until 00:00 UTC", async () => {
-    const { db, c, fire, tgt } = await startCollector({ helius: { daily_mb_cap: 0.01, steps_pct: [70, 85, 95] }, firehose: { enabled: false, hours_utc: [0, 24] } });
+    const { db, c, fire, tgt } = await startCollector({ helius: { ...testConfig().collector.helius, daily_mb_cap: 0.01 }, firehose: { enabled: false, hours_utc: [0, 24] } });
     await until(() => tgt.connections === 1);
     for (let i = 0; i < 6; i++) tgt.push(notify(`big${i}`, 1, ["x".repeat(2_000)]));
     await until(() => c.streams.targeted === null, 8_000);
@@ -274,6 +274,16 @@ describe("Collector: Helius budget", () => {
     expect(db.prepare("SELECT value FROM kv WHERE key = 'collector.data_mode'").get()).toEqual({ value: "off" });
     expect(fire.connections).toBe(0);
   }, 10_000);
+
+  it("a cap raised on the dashboard switches the streams back on within seconds", async () => {
+    const { db, c, tgt } = await startCollector({ helius: { ...testConfig().collector.helius, daily_mb_cap: 0.01 }, firehose: { enabled: false, hours_utc: [0, 24] } });
+    await until(() => tgt.connections === 1);
+    for (let i = 0; i < 6; i++) tgt.push(notify(`big${i}`, 1, ["x".repeat(2_000)]));
+    await until(() => c.streams.targeted === null, 8_000);
+    db.prepare("INSERT INTO kv (key, value) VALUES ('override.helius_daily_mb_cap', '100')").run();
+    await until(() => c.streams.targeted === true, 8_000);
+    expect(db.prepare("SELECT value FROM kv WHERE key = 'collector.data_mode'").get()).toEqual({ value: "normal" });
+  }, 20_000);
 
   it("never goes blind in an open trade: past the cap it keeps watching only the open position", async () => {
     const db = openDb(":memory:");
@@ -284,7 +294,7 @@ describe("Collector: Helius budget", () => {
     db.prepare("INSERT INTO paper_positions (signal_id, mint, leader_wallet, status, size_sol, leader_price, entry_due_at) VALUES (1, 'M', ?, 'open', 0.02, 1e-8, 0)").run(wallet);
     db.prepare("INSERT INTO watchlist (address, kind, mint, until, priority, reason) VALUES (?, 'curve', 'M', ?, 1, 'paper position')").run(held, far);
     db.prepare("INSERT INTO watchlist (address, kind, mint, until, priority, reason) VALUES (?, 'curve', 'N', ?, 2, 'tracked wallet trade')").run(other, far);
-    const { c, tgt } = await startCollector({ helius: { daily_mb_cap: 0.01, steps_pct: [70, 85, 95] }, firehose: { enabled: false, hours_utc: [0, 24] } }, { db });
+    const { c, tgt } = await startCollector({ helius: { ...testConfig().collector.helius, daily_mb_cap: 0.01 }, firehose: { enabled: false, hours_utc: [0, 24] } }, { db });
     await until(() => new Set(tgt.subs()).size === 3);
     for (let i = 0; i < 6; i++) tgt.push(notify(`big${i}`, 1, ["x".repeat(2_000)])); // past 100%
     await until(() => (db.prepare("SELECT value FROM kv WHERE key = 'collector.data_mode'").get() as { value: string } | undefined)?.value === "positions_only", 8_000);

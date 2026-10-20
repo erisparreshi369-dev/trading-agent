@@ -16,6 +16,8 @@ import time
 from collections import deque
 from pathlib import Path
 
+import settings
+
 ROOT = Path(__file__).resolve().parent.parent
 SERVICES = ["collector", "trader", "notifier"]
 LEARNER_UNITS = {"weekly": "weekly report / retrain", "score": "wallet re-scoring"}
@@ -212,6 +214,7 @@ class Snapshot:
             "latency": self.cached("latency", 15, lambda: self.latency(now)),
             "learner": self.cached("learner", 30, lambda: self.learner(svc, info.get("scoring"), heartbeats.get("scoring"))),
             "madeonsol": self.cached("madeonsol", 10, lambda: self.madeonsol(now, info.get("intel"), heartbeats.get("intel"), svc)),
+            "settings": {name: settings.current(self.c, name) for name in settings.SETTINGS} if self.has("kv") else {},
         }
 
     # ---- 1. services
@@ -425,6 +428,7 @@ class Snapshot:
             "hourly": self.cached("hourly", 60, hourly), "db_bytes": size, "warnings": warnings,
             "streams": streams, "helius_mb": collector.get("heliusMbToday"), "helius_cap_mb": collector.get("heliusCapMb"),
             "helius_mb_per_hour": collector.get("heliusMbPerHour"), "helius_cap_at": collector.get("heliusCapAt"),
+            "helius_monthly_guard_mb": collector.get("heliusMonthlyGuardMb"),
             "data_mode": collector.get("dataMode"), "budget_steps_pct": collector.get("budgetStepsPct"),
             "open_gaps": [dict(g) for g in open_gaps],
         }

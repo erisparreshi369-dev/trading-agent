@@ -6,6 +6,7 @@ import { attachAlerts, markStarted, runService } from "../lib/service.js";
 import { Notifier, SERVICE } from "./notifier.js";
 import { solUsd } from "./price.js";
 import { Telegram } from "./telegram.js";
+import { setVoice } from "./voice.js";
 
 const token = env.telegramToken(), chatId = env.telegramChatId();
 if (!token || !chatId) {
@@ -13,6 +14,7 @@ if (!token || !chatId) {
   process.exit(1);
 }
 const cfg = loadConfig();
+setVoice(cfg.notifier.voice); // plain or genz: every message, summary and fallback at once
 const db = openDb(env.dbPath);
 attachAlerts(db, SERVICE);
 const previous = markStarted(db, SERVICE);

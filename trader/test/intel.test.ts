@@ -58,6 +58,16 @@ describe("MadeOnSol client: budget, timeout, never in the way", () => {
     expect(calls[0]!.auth).toBe(`Bearer ${KEY}`);
   });
 
+  it("the dashboard can move the stop point (up to all of MadeOnSol's requests); a bad value is ignored", async () => {
+    const db = memDb();
+    const { api, calls } = client(db, () => ({ body: {} }), { daily_requests: 10 });
+    db.prepare("INSERT INTO kv (key, value) VALUES ('override.madeonsol_stop_pct', '100')").run();
+    for (let i = 0; i < 12; i++) await api.request("me");
+    expect(calls).toHaveLength(10);
+    db.prepare("UPDATE kv SET value = '250' WHERE key = 'override.madeonsol_stop_pct'").run();
+    expect(api.stopAt).toBe(9); // back to config's 90%
+  });
+
   it("trusts MadeOnSol's own count when it's higher (e.g. requests you made by hand today)", async () => {
     const db = memDb();
     const { api, calls } = client(db, () => ({ body: {}, headers: { "x-ratelimit-used": "185" } }));

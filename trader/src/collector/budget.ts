@@ -17,6 +17,37 @@
  */
 export type DataMode = "normal" | "light" | "essential" | "positions_only" | "off";
 
+/** stream_usage sources that are metered Helius traffic. */
+export const HELIUS_SOURCES = ["helius", "firehose", "targeted"];
+/** The dashboard's daily-cap override (kv), set until changed back. */
+export const CAP_OVERRIDE_KEY = "override.helius_daily_mb_cap";
+
+export interface DailyCap {
+  capMb: number; // what today may use: the chosen cap, never above the monthly guard
+  chosenMb: number; // config, or the dashboard override
+  overridden: boolean;
+  monthlyGuardMb: number; // most today may use without the last 31 days exceeding the monthly budget
+}
+
+/**
+ * Today's cap. Helius's monthly credits reset on a date we don't know; if every 31 days in a row
+ * stay under the monthly budget, every billing month does. So today may use the monthly budget
+ * minus what the previous 30 days used, and never more than the chosen daily cap.
+ */
+export function dailyCap(db: { prepare(sql: string): { get(...a: unknown[]): unknown } },
+  h: { daily_mb_cap: number; monthly_credits: number; credits_per_mb: number; stream_share: number }, now: number): DailyCap {
+  const row = db.prepare("SELECT value FROM kv WHERE key = ?").get(CAP_OVERRIDE_KEY) as { value: string } | undefined;
+  const override = row ? Number(row.value) : NaN;
+  const overridden = Number.isFinite(override) && override > 0;
+  const chosenMb = overridden ? override : h.daily_mb_cap;
+  const today = new Date(now).toISOString().slice(0, 10);
+  const from = new Date(now - 30 * 86_400_000).toISOString().slice(0, 10);
+  const used = (db.prepare(`SELECT COALESCE(SUM(bytes), 0) b FROM stream_usage WHERE day >= ? AND day < ? AND source IN (${HELIUS_SOURCES.map(() => "?").join(",")})`)
+    .get(from, today, ...HELIUS_SOURCES) as { b: number }).b / 1e6;
+  const monthlyGuardMb = Math.max(0, (h.monthly_credits * h.stream_share) / h.credits_per_mb - used);
+  return { capMb: Math.min(chosenMb, monthlyGuardMb), chosenMb, overridden, monthlyGuardMb };
+}
+
 /** Watch reasons written to the watchlist table. */
 export const WATCH_POSITION = "paper position";
 export const WATCH_TOKEN = "tracked wallet trade";

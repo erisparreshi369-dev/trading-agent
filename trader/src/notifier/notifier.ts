@@ -11,7 +11,8 @@ import {
   account, buyFacts, DAY, fillsSince, HOUR, missedFacts, partHealth, period, pnlFacts, reportFacts, sellFacts, signalFacts, statusFacts,
   utcDayStart, whyFacts,
 } from "./data.js";
-import * as M from "./messages.js";
+import type { Ctx } from "./messages.js";
+import { M } from "./voice.js";
 
 /** No new coin launch seen for this long (while the data collector runs) = market data stopped. */
 const DATA_SILENT_MS = 10 * 60_000;
@@ -122,7 +123,7 @@ export class Notifier {
   // sending
   // ---------------------------------------------------------------------------------------------
 
-  private ctx(): M.Ctx {
+  private ctx(): Ctx {
     return { mode: "paper", tz: this.d.cfg.notifier.timezone, usd: this.usd.value, now: this.now() };
   }
 
@@ -259,6 +260,12 @@ export class Notifier {
         case "helius_budget":
           ok = await this.say(M.dataBudget(c, { pct: Number(data.pct), mbToday: Number(data.mbToday), capMb: Number(data.capMb),
             mbPerHour: Number(data.mbPerHour ?? 0), capAt: data.capAt == null ? null : Number(data.capAt) }));
+          break;
+        case "setting_changed":
+          ok = await this.say(M.settingChanged(c, {
+            setting: String(data.setting), from: Number(data.from), to: Number(data.to), reset: !!data.reset,
+            guardMb: data.guardMb == null ? null : Number(data.guardMb), limit: data.limit == null ? null : Number(data.limit),
+          }));
           break;
         case "madeonsol_budget":
           ok = await this.say(M.helperBudget(c, { pct: Number(data.pct), used: Number(data.used), limit: Number(data.limit) }));

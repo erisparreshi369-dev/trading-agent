@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import http.client
 import json
+import os
 import sqlite3
 import sys
 import tempfile
@@ -171,6 +172,64 @@ class DashboardServer(unittest.TestCase):
         finally:
             srv.shutdown()
             srv.server_close()
+
+    def test_settings_changes_only_from_this_dashboard(self):
+        tmp = tempfile.TemporaryDirectory()
+        path = Path(tmp.name) / "t.db"
+        seed(path)
+        old_env = os.environ.get("DB_PATH")
+        os.environ["DB_PATH"] = str(path)
+        hub = server.Hub()
+        srv = ThreadingHTTPServer(("127.0.0.1", 0), server.make_handler(hub))
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        port = srv.server_address[1]
+
+        def post(body, token=hub.token, host=None, origin=None):
+            c = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
+            h = {"Content-Type": "application/json", "Host": host or f"localhost:{port}"}
+            if token is not None:
+                h["X-Dashboard-Token"] = token
+            if origin:
+                h["Origin"] = origin
+            c.request("POST", "/api/settings", body=json.dumps(body), headers=h)
+            r = c.getresponse()
+            return r.status, json.loads(r.read() or b"{}")
+
+        try:
+            kv = lambda: dict(sqlite3.connect(path).execute("SELECT key, value FROM kv WHERE key LIKE 'override.%'").fetchall())
+            raise_cap = {"setting": "helius_daily_mb_cap", "value": 4000}
+            # refused: no token, wrong token, another site, a rebinding hostname
+            self.assertEqual(post(raise_cap, token=None)[0], 403)
+            self.assertEqual(post(raise_cap, token="guess")[0], 403)
+            self.assertEqual(post(raise_cap, origin="https://evil.example")[0], 403)
+            self.assertEqual(post(raise_cap, host="evil.example:8080")[0], 403)
+            # refused: bad values, other settings
+            self.assertEqual(post({"setting": "helius_daily_mb_cap", "value": 50})[0], 400)
+            self.assertEqual(post({"setting": "helius_daily_mb_cap", "value": "lots"})[0], 400)
+            self.assertEqual(post({"setting": "madeonsol_stop_pct", "value": 101})[0], 400)
+            self.assertEqual(post({"setting": "MAX_OPEN_POSITIONS", "value": 99})[0], 400)
+            self.assertEqual(kv(), {})
+            # accepted from the page itself
+            code, res = post(raise_cap, origin=f"http://localhost:{port}")
+            self.assertEqual((code, res["value"], res["overridden"]), (200, 4000, True))
+            self.assertEqual(post({"setting": "madeonsol_stop_pct", "value": 100})[0], 200)
+            self.assertEqual(kv(), {"override.helius_daily_mb_cap": "4000", "override.madeonsol_stop_pct": "100.0"})
+            # back to normal
+            code, res = post({"setting": "helius_daily_mb_cap", "value": None})
+            self.assertEqual((code, res["value"], res["overridden"]), (200, 1500, False))
+            self.assertEqual(kv(), {"override.madeonsol_stop_pct": "100.0"})
+            # every change is announced on Telegram (alerts outbox)
+            notes = [json.loads(d) for (d,) in sqlite3.connect(path).execute("SELECT data FROM alerts WHERE kind = 'setting_changed' ORDER BY id")]
+            self.assertEqual([(n["setting"], n["from"], n["to"], n["reset"]) for n in notes],
+                             [("helius_daily_mb_cap", 1500, 4000, False), ("madeonsol_stop_pct", 90, 100, False), ("helius_daily_mb_cap", 4000, 1500, True)])
+        finally:
+            srv.shutdown()
+            srv.server_close()
+            if old_env is None:
+                os.environ.pop("DB_PATH", None)
+            else:
+                os.environ["DB_PATH"] = old_env
+            tmp.cleanup()
 
     def test_refuses_public_bind(self):
         argv = sys.argv

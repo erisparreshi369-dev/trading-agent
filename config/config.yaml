@@ -9,6 +9,13 @@ collector:
     # This is OUR per-UTC-day share of it: 1500 MB = 30k credits/day = 930k/month, leaving room
     # for RPC calls. Developer plan (10M/month): ~15000. Measured full firehose: ~35 GB/day.
     daily_mb_cap: 1500
+    # The dashboard can raise the daily cap (stored in the database until you change it back).
+    # Whatever the cap, a monthly guard holds: over any 31 days the streams never use more than
+    # stream_share of monthly_credits (the rest stays for RPC calls), so the plan's monthly credits
+    # can't run out whatever day Helius resets them. Raising the cap one day leaves less for the next.
+    monthly_credits: 1000000      # Free plan
+    credits_per_mb: 20
+    stream_share: 0.9
     # Lighter data modes as the day's budget runs down (and a Telegram warning at each step):
     #   1st: firehose off (no new-wallet discovery), no pool watching after migration
     #   2nd: only tracked wallets, tokens they traded in the last 30 min, and open trades
@@ -143,6 +150,7 @@ notifier:
   trade_alerts: true                  # a message for every trade we follow (skipped ones go in the hourly summary)
   timezone: UTC                       # clock times in messages, e.g. Europe/London; daily limits still reset at 00:00 UTC
   usd_prices: true                    # show dollar amounts next to SOL (SOL price from CoinGecko, refreshed every 10 min)
+  voice: genz                         # how messages sound: genz (notifier/messages-genz.ts) or plain (notifier/messages.ts)
 
 providers:
   # Where market data comes from. Keys live in .env (key_env names the variable); a provider whose

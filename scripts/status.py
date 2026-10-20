@@ -63,6 +63,10 @@ def data_budget(c: sqlite3.Connection, i: dict, now: float) -> tuple[str, str]:
     pct = mb / cap * 100 if cap else 0
     col = R if pct >= 95 else Y if pct >= 70 else G
     out = f"helius today {col}{mb:.0f} / {cap:.0f} MB ({pct:.0f}%){X}"
+    if i.get("heliusCapOverridden"):
+        out += f" {Y}(raised on the dashboard to {i.get('heliusCapChosenMb', 0):.0f}){X}"
+    if i.get("heliusMonthlyGuardMb") is not None and i.get("heliusCapChosenMb", cap) > i["heliusMonthlyGuardMb"]:
+        out += f" {D}[monthly guard: {i['heliusMonthlyGuardMb']:.0f} MB today]{X}"
     if i.get("heliusMbPerHour") is not None:
         out += f"  {i['heliusMbPerHour']:.0f} MB/h"
         eta = i.get("heliusCapAt")

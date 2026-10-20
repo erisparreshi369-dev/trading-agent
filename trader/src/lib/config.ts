@@ -16,6 +16,9 @@ const CollectorSchema = z
     helius: z
       .object({
         daily_mb_cap: z.number().positive(),
+        monthly_credits: z.number().int().positive(),
+        credits_per_mb: z.number().positive(),
+        stream_share: z.number().gt(0).max(1),
         steps_pct: z.tuple([z.number(), z.number(), z.number()]).refine(([a, b, c]) => 0 < a && a < b && b < c && c < 100, "three rising percentages below 100"),
       })
       .strict(),
@@ -153,6 +156,7 @@ const NotifierSchema = z
       }
     }, "unknown time zone (use a name like UTC or Europe/London)"),
     usd_prices: z.boolean(),
+    voice: z.enum(["plain", "genz"]),
   })
   .strict();
 

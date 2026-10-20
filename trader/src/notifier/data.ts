@@ -1,8 +1,9 @@
 import type { Config } from "../lib/config.js";
 import type { DB } from "../lib/db.js";
 import { RISK } from "../risk/limits.js";
+import { M } from "./voice.js";
 import {
-  explainSkip, type ActivityFacts, type BuyFacts, type Counted, type Health, type MissedFacts, type PeriodResult, type PnlFacts,
+  type ActivityFacts, type BuyFacts, type Counted, type Health, type MissedFacts, type PeriodResult, type PnlFacts,
   type ReportFacts, type SellFacts, type StatusFacts, type TokenRef, type WhyEvent,
 } from "./messages.js";
 
@@ -201,11 +202,11 @@ export function signalFacts(db: DB, from: number, to: number, topN = 3): Omit<Ac
     if (r.decision === "enter") copied++;
     else if (r.decision === "risk_block") {
       blockedTotal++;
-      const t = explainSkip(reasons.find((x) => x.startsWith("risk:")) ?? "").short;
+      const t = M.explainSkip(reasons.find((x) => x.startsWith("risk:")) ?? "").short;
       blocked.set(t, (blocked.get(t) ?? 0) + 1);
     } else {
       skippedTotal++;
-      const t = explainSkip(reasons[0] ?? "").short; // the first check it failed
+      const t = M.explainSkip(reasons[0] ?? "").short; // the first check it failed
       skipped.set(t, (skipped.get(t) ?? 0) + 1);
     }
   }

@@ -43,6 +43,15 @@ systemd runs `trading-failure@` on every crash, even when `Restart=` brings the 
 
 After a reboot everything starts by itself (linger). `make drill` re-verifies recovery end to end.
 
+## Changing limits on the dashboard
+
+The **Daily data limit** (Data collection panel) and **Daily job stops at** (MadeOnSol panel) can be
+changed on the page; they stay until you press "Back to normal". The collector picks a new data
+limit up within ~5 s. A raised data limit is still capped by the monthly guard shown next to it:
+using more today leaves less for the following days, and the plan's monthly credits can't run out.
+Each change sends a `SETTINGS` Telegram message. To clear them by hand:
+`sqlite3 data/trading.db "DELETE FROM kv WHERE key LIKE 'override.%'"`.
+
 ## MadeOnSol helper (optional)
 
 | symptom | meaning / fix |

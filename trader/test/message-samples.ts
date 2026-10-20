@@ -2,15 +2,16 @@
  * Every message in messages.ts, rendered with realistic facts. The tests check the house rules on
  * all of them; `npx tsx test/message-samples.ts [name...]` prints them to proofread the wording.
  */
-import * as M from "../src/notifier/messages.js";
+import * as Plain from "../src/notifier/messages.js";
+import { VOICES, type Messages } from "../src/notifier/voice.js";
 
 const now = Date.UTC(2026, 9, 21, 0, 5);
-const ctx: M.Ctx = { mode: "paper", tz: "UTC", usd: 105.2, now };
+const ctx: Plain.Ctx = { mode: "paper", tz: "UTC", usd: 105.2, now };
 const MOON = { mint: "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU", symbol: "MOON" };
 const RUG = { mint: "9sPqzB3vWnD4mXc8kLrT6hYfE2aJ5uGQ1oNbVi7Cpump", symbol: "FROG" };
 const min = 60_000;
 
-const report: M.ReportFacts = {
+const reportFor = (M: Messages): Plain.ReportFacts => ({
   from: now - 5 * min - 86_400_000, to: now - 5 * min, equity: 1.0123, start: 1,
   period: { closed: 7, wins: 4, pnl: 0.0081, missed: 3, best: { ...MOON, pnl: 0.009 }, worst: { ...RUG, pnl: -0.0061 }, avgSlippage: 0.021 },
   exits: [{ text: "leader_exit", n: 4 }, { text: "stop_loss", n: 2 }, { text: "time_exit", n: 1 }],
@@ -24,9 +25,11 @@ const report: M.ReportFacts = {
   wallets: { tracked: 25, added: 2, removed: 1 }, data: { mb: 1210, capMb: 1500 },
   trouble: [{ service: "collector", restarts: 1, errors: 6 }],
   verdict: { closedAllTime: 12, pnlAllTime: 0.0123, start: 1, pnlLast7d: 0.0123 }, killed: false, stopLossPct: 0.25,
-};
+});
 
-export function samples(): { name: string; text: string }[] {
+/** Every message in one voice (plain by default). */
+export function samples(M: Messages = Plain): { name: string; text: string }[] {
+  const report = reportFor(M);
   const out: [string, string][] = [
     ["guide (first message ever)", M.guide(ctx, "00:05 UTC")],
     ["words", M.words()],
@@ -70,6 +73,9 @@ export function samples(): { name: string; text: string }[] {
     ["daily loss cap", M.dailyLossCap(ctx, 0.95, 1.0)],
     ["data cap", M.dataCapReached(ctx, 1500)],
     ["data cap, trades open", M.dataCapReached(ctx, 1500, 2)],
+    ["setting: data cap", M.settingChanged(ctx, { setting: "helius_daily_mb_cap", from: 1500, to: 4000, reset: false, guardMb: 44000, limit: null })],
+    ["setting: data cap reset", M.settingChanged(ctx, { setting: "helius_daily_mb_cap", from: 4000, to: 1500, reset: true, guardMb: 44000, limit: null })],
+    ["setting: helper stop", M.settingChanged(ctx, { setting: "madeonsol_stop_pct", from: 90, to: 100, reset: false, guardMb: null, limit: 200 })],
     ["helper 70%", M.helperBudget(ctx, { pct: 70, used: 140, limit: 200 })],
     ["helper 90%", M.helperBudget(ctx, { pct: 90, used: 180, limit: 200 })],
     ["helper out", M.helperBudget(ctx, { pct: 100, used: 200, limit: 200 })],
@@ -127,5 +133,7 @@ export function samples(): { name: string; text: string }[] {
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   const want = process.argv.slice(2);
-  for (const s of samples()) if (!want.length || want.includes(s.name)) console.log(`──── ${s.name}\n${s.text}\n`);
+  // npx tsx test/message-samples.ts [--genz] [name...]
+  const voice = want[0] === "--genz" ? (want.shift(), VOICES.genz) : Plain;
+  for (const s of samples(voice)) if (!want.length || want.includes(s.name)) console.log(`──── ${s.name}\n${s.text}\n`);
 }
