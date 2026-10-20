@@ -153,8 +153,29 @@ const NotifierSchema = z
   })
   .strict();
 
+const ProviderName = z.enum(["helius", "drpc", "ankr"]);
+const ProvidersSchema = z
+  .object({
+    list: z.record(ProviderName, z.object({ key_env: z.string().regex(/^[A-Z][A-Z0-9_]*$/), ws: z.string().url(), http: z.string().url() }).strict()),
+    jobs: z
+      .object(Object.fromEntries((["following", "discovery", "lookups", "history"] as const).map((j) => [j,
+        z.object({ use: z.array(ProviderName).min(1), mode: z.enum(["failover"]) }).strict()])) as Record<"following" | "discovery" | "lookups" | "history", z.ZodObject<{ use: z.ZodArray<typeof ProviderName>; mode: z.ZodEnum<["failover"]> }>>)
+      .strict(),
+    health: z
+      .object({
+        errors_in_a_row: z.number().int().positive(),
+        timeout_s: z.number().positive(),
+        silent_s: z.number().positive(),
+        budget_pct: z.number().positive().max(100),
+        switch_back_after_healthy_s: z.number().nonnegative(),
+      })
+      .strict(),
+  })
+  .strict()
+  .refine((p) => Object.values(p.jobs).every((j) => j.use.every((n) => n in p.list)), "every provider a job uses must be in providers.list");
+
 export const ConfigSchema = z
-  .object({ collector: CollectorSchema, scoring: ScoringSchema, signals: SignalsSchema, paper: PaperSchema, shadow: ShadowSchema, notifier: NotifierSchema })
+  .object({ collector: CollectorSchema, scoring: ScoringSchema, signals: SignalsSchema, paper: PaperSchema, shadow: ShadowSchema, notifier: NotifierSchema, providers: ProvidersSchema })
   .strict();
 
 export type Config = z.infer<typeof ConfigSchema>;
@@ -165,6 +186,9 @@ export type PaperConfig = z.infer<typeof PaperSchema>;
 export type ShadowConfig = z.infer<typeof ShadowSchema>;
 export type ShadowExitConfig = z.infer<typeof ExitSchema>;
 export type NotifierConfig = z.infer<typeof NotifierSchema>;
+export type ProvidersConfig = z.infer<typeof ProvidersSchema>;
+export type ProviderName = z.infer<typeof ProviderName>;
+export type JobName = keyof ProvidersConfig["jobs"];
 
 export function loadConfig(path = resolve(ROOT, "config/config.yaml")): Config {
   return ConfigSchema.parse(YAML.parse(readFileSync(path, "utf8")));

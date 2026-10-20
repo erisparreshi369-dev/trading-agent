@@ -1,4 +1,6 @@
-import type { CollectorConfig } from "../lib/config.js";
+import type { CollectorConfig, JobName, ProviderName, ProvidersConfig } from "../lib/config.js";
+import { JobRouter, ProviderHealth, type Switch } from "../providers/health.js";
+import { candidates, providersFrom, type Provider } from "../providers/registry.js";
 import { heartbeat, type DB } from "../lib/db.js";
 import { log } from "../lib/log.js";
 import { ReconnectingWs } from "../lib/reconnecting-ws.js";
@@ -18,6 +20,8 @@ const HELIUS_SOURCES = ["helius", "firehose", "targeted"];
 export interface CollectorDeps {
   db: DB;
   cfg: CollectorConfig;
+  /** the provider layer's settings; without it, Helius (via heliusApiKey) is the only provider */
+  providers?: ProvidersConfig;
   heliusApiKey?: string;
   /** Overridable for tests. */
   firehoseUrl?: string;
@@ -54,6 +58,9 @@ export class Collector {
   private creatorCache = new Map<string, string | null>();
   private lastWatched = new Map<string, number>();
   private seen = [new Set<string>(), new Set<string>()];
+  private available = new Map<ProviderName, Provider>();
+  private health?: ProviderHealth;
+  private routers: JobRouter[] = [];
   readonly stats = {
     notifications: 0, duplicates: 0, trades: 0, ammTrades: 0, ammUnknownPool: 0, creates: 0, completes: 0, migrations: 0,
     ppCreates: 0, ppMigrations: 0, nonSolSkipped: 0, decodeErrors: 0, rowsWritten: 0,
@@ -84,29 +91,30 @@ export class Collector {
     if (warned) this.warned = { day: warned[0]!, step: Number(warned[1]) || 0 };
 
     const key = this.d.heliusApiKey ?? "";
-    const heliusWs = `wss://mainnet.helius-rpc.com/?api-key=${key}`;
+    this.setupProviders();
+    const heliusWs = this.available.get("helius")?.ws ?? `wss://mainnet.helius-rpc.com/?api-key=${key}`;
     if (!this.hasHelius) {
       log.warn("HELIUS_API_KEY not set: only new tokens and migrations (PumpPortal) will be collected");
     } else {
       if (cfg.firehose.enabled) {
-        this.firehose = this.makeStream("firehose", this.d.firehoseUrl ?? heliusWs, cfg.stale_stream_s * 1000, () => [
+        this.firehose = this.makeStream("firehose", this.d.firehoseUrl ?? heliusWs, cfg.stale_stream_s * 1000, "helius", () => [
           { jsonrpc: "2.0", id: 1, method: "logsSubscribe", params: [{ mentions: [PUMP_PROGRAM] }, { commitment: "confirmed" }] },
         ]);
-        this.firehose.on("message", (raw: string) => this.onHelius(raw, "firehose"));
+        this.firehose.on("message", (raw: string) => this.onHelius(raw, "firehose", "helius"));
       }
       if (cfg.targeted.enabled) {
         // Targeted subscriptions can be quiet for a long time; only reconnect on real silence.
-        this.targetedWs = this.makeStream("targeted", this.d.targetedUrl ?? heliusWs, 15 * 60_000, () => this.targeted!.openMessages());
+        this.targetedWs = this.makeStream("targeted", this.d.targetedUrl ?? heliusWs, 15 * 60_000, "helius", () => this.targeted!.openMessages());
         this.targeted = new TargetedSubscriptions(this.targetedWs, cfg.targeted.max_subscriptions);
-        this.targetedWs.on("message", (raw: string) => this.onHelius(raw, "targeted"));
+        this.targetedWs.on("message", (raw: string) => this.onHelius(raw, "targeted", "helius"));
       }
       if (this.d.heliusApiKey && cfg.holder_checks.enabled) {
-        this.holders = new HolderChecker(db, `https://mainnet.helius-rpc.com/?api-key=${key}`, cfg.holder_checks, (m) => this.bars.tradeCount(m));
+        this.holders = new HolderChecker(db, this.available.get("helius")?.http ?? `https://mainnet.helius-rpc.com/?api-key=${key}`, cfg.holder_checks, (m) => this.bars.tradeCount(m));
         this.holders.start();
       }
     }
     if (cfg.pumpportal_streams) {
-      this.pumpportal = this.makeStream("pumpportal", this.d.pumpportalUrl ?? PUMPPORTAL_URL, cfg.stale_stream_s * 1000, () => [
+      this.pumpportal = this.makeStream("pumpportal", this.d.pumpportalUrl ?? PUMPPORTAL_URL, cfg.stale_stream_s * 1000, null, () => [
         { method: "subscribeNewToken" },
         { method: "subscribeMigration" },
       ]);
@@ -152,12 +160,79 @@ export class Collector {
     };
   }
 
-  private makeStream(name: string, url: string, staleMs: number, subs: () => unknown[]): ReconnectingWs {
+  private makeStream(name: string, url: string, staleMs: number, provider: ProviderName | null, subs: () => unknown[]): ReconnectingWs {
     const ws = new ReconnectingWs({ name, url, onOpenMessages: subs, staleMs });
-    ws.on("message", (_raw: string, bytes: number) => this.meter(name, bytes));
-    ws.on("up", () => this.closeGap(name));
-    ws.on("down", (reason: string) => this.openGap(name, reason));
+    ws.on("message", (_raw: string, bytes: number) => {
+      this.meter(name, bytes);
+      if (provider) this.health?.message(provider);
+    });
+    ws.on("up", () => {
+      this.closeGap(name);
+      if (provider) this.health?.connected(provider);
+    });
+    ws.on("down", (reason: string) => {
+      this.openGap(name, reason);
+      if (provider && reason !== "stopped") this.health?.error(provider, `${name} stream: ${reason}`); // a deliberate stop isn't a fault
+    });
+    ws.on("failed", (reason: string) => {
+      if (provider) this.health?.error(provider, `${name} stream could not connect: ${reason}`);
+    });
     return ws;
+  }
+
+  // ---- provider layer (step 1: observe health, log switches; streams still come from Helius) ----
+
+  private setupProviders(): void {
+    const p = this.d.providers;
+    if (!p) {
+      if (this.d.heliusApiKey || this.d.firehoseUrl || this.d.targetedUrl) this.available.set("helius", { name: "helius", ws: "", http: "" });
+      return;
+    }
+    this.available = providersFrom(p);
+    if (!this.available.size && (this.d.firehoseUrl || this.d.targetedUrl)) this.available.set("helius", { name: "helius", ws: "", http: "" }); // tests
+    this.health = new ProviderHealth(p.health, this.now);
+    for (const job of ["following", "discovery", "lookups", "history"] as JobName[]) {
+      const order = candidates(p, job, this.available);
+      if (!order.length) continue;
+      const r = new JobRouter(job, order, this.health, p.health, (sw) => this.logSwitch(sw), this.now);
+      this.routers.push(r);
+      this.logSwitch({ job, from: null, to: r.active, reason: `collector started; can use ${order.join(", ")}`, at: this.now() });
+    }
+  }
+
+  /** Every change of provider is written down, so the learner and the dashboard can see it. */
+  private logSwitch(sw: Switch): void {
+    this.d.db.prepare("INSERT INTO provider_events (ts, job, from_provider, to_provider, reason) VALUES (?, ?, ?, ?, ?)")
+      .run(sw.at, sw.job, sw.from, sw.to, sw.reason);
+    if (sw.from !== null || sw.to === null) log.warn({ job: sw.job, from: sw.from, to: sw.to, reason: sw.reason }, "data provider switched");
+  }
+
+  /** Feed budget and "should be busy" into provider health, then let each job re-pick. */
+  private observeProviders(): void {
+    if (!this.health) return;
+    this.health.budget("helius", (this.heliusBytesToday / 1e6 / this.d.cfg.helius.daily_mb_cap) * 100);
+    // only the full stream is reliably busy; followed traders can be quiet for minutes
+    this.health.expectTraffic("helius", this.firehoseRunning && !!this.firehose?.up);
+    for (const r of this.routers) r.evaluate();
+  }
+
+  /** Which provider each job uses right now (null = none usable). */
+  get activeProviders(): Record<string, ProviderName | null> {
+    return Object.fromEntries(this.routers.map((r) => [r.job, r.active]));
+  }
+
+  /** For the heartbeat (and the dashboard's provider panel later). */
+  private providerSummary() {
+    if (!this.health) return null;
+    return {
+      active: this.activeProviders,
+      configured: [...this.available.keys()],
+      health: Object.fromEntries(this.health.all().map(([n, st]) => [n, {
+        healthy: st.healthy, reason: st.reason, messages: st.messages, requests: st.requests, failures: st.failures,
+        budgetPct: +st.budgetPct.toFixed(1), lastLatencyMs: st.lastLatencyMs, lastError: st.lastError, lastErrorAt: st.lastErrorAt,
+        lastMessageAt: st.lastMessageAt,
+      }])),
+    };
   }
 
   // ---- budget + schedule ----
@@ -209,6 +284,7 @@ export class Collector {
         this.targetedWs.stop();
       }
     }
+    this.observeProviders();
   }
 
   private rollDay(): void {
@@ -261,7 +337,8 @@ export class Collector {
 
   // ---- helius (firehose + targeted) ----
 
-  private onHelius(raw: string, source: string): void {
+  /** A logs notification from a Solana websocket; `provider` delivered it (saved as data_source). */
+  private onHelius(raw: string, source: string, provider: ProviderName): void {
     let msg: any;
     try {
       msg = JSON.parse(raw);
@@ -295,11 +372,11 @@ export class Collector {
       return;
     }
     // ev_index must be stable for a tx regardless of which stream delivered it: pump first, then amm
-    pump.forEach((ev, i) => this.onPumpEvent(ev, v.signature, i, slot, receivedAt));
-    amm.forEach((ev, i) => this.onAmmEvent(ev, v.signature, pump.length + i, slot, receivedAt));
+    pump.forEach((ev, i) => this.onPumpEvent(ev, v.signature, i, slot, receivedAt, provider));
+    amm.forEach((ev, i) => this.onAmmEvent(ev, v.signature, pump.length + i, slot, receivedAt, provider));
   }
 
-  private onPumpEvent(ev: PumpEvent, signature: string, evIndex: number, slot: number | null, receivedAt: number): void {
+  private onPumpEvent(ev: PumpEvent, signature: string, evIndex: number, slot: number | null, receivedAt: number, provider: ProviderName): void {
     if (ev.kind === "create") {
       this.stats.creates++;
       const createdAt = ev.timestamp ? ev.timestamp * 1000 : receivedAt;
@@ -327,7 +404,7 @@ export class Collector {
         is_buy: ev.isBuy ? 1 : 0, sol_lamports: ev.solLamports, token_amount: ev.tokenAmount, v_sol_reserves: ev.vSol,
         v_token_reserves: ev.vToken, real_sol_reserves: ev.realSol, real_token_reserves: ev.realToken, fee_lamports: ev.fee,
         creator_fee_lamports: ev.creatorFee, price_sol: price, is_dev: ev.creator !== null && ev.creator === ev.user ? 1 : 0,
-        ix_name: ev.ixName, source: "helius", venue: "curve",
+        ix_name: ev.ixName, source: "helius", venue: "curve", data_source: provider,
       });
       // Bars use receive time: on-chain timestamps are whole seconds, too coarse for 5s buckets.
       this.store.addBars(this.bars.onTrade({
@@ -345,7 +422,7 @@ export class Collector {
     }
   }
 
-  private onAmmEvent(ev: AmmTradeEvent, signature: string, evIndex: number, slot: number | null, receivedAt: number): void {
+  private onAmmEvent(ev: AmmTradeEvent, signature: string, evIndex: number, slot: number | null, receivedAt: number, provider: ProviderName): void {
     const mint = this.poolToMint.get(ev.pool);
     if (!mint) {
       this.stats.ammUnknownPool++; // a pool we never saw being created: not a token we track
@@ -359,7 +436,7 @@ export class Collector {
       is_buy: ev.isBuy ? 1 : 0, sol_lamports: ev.quoteAmount, token_amount: ev.baseAmount, v_sol_reserves: ev.poolQuote,
       v_token_reserves: ev.poolBase, real_sol_reserves: null, real_token_reserves: null, fee_lamports: ev.fee,
       creator_fee_lamports: ev.creatorFee, price_sol: price, is_dev: creator === ev.user ? 1 : 0, ix_name: null,
-      source: "helius", venue: "amm",
+      source: "helius", venue: "amm", data_source: provider,
     });
     this.store.addBars(this.bars.onTrade({
       mint, wallet: ev.user, isBuy: ev.isBuy, solLamports: ev.quoteAmount, tokenAmount: ev.baseAmount, vSol: ev.poolQuote, price, ts: receivedAt,
@@ -521,6 +598,7 @@ export class Collector {
       heliusMbPerHour: +this.rate.mbPerHour(this.now()).toFixed(1), heliusCapAt: capEta(this.heliusBytesToday / 1e6, this.d.cfg.helius.daily_mb_cap,
         this.rate.mbPerHour(this.now()), this.now()), dataMode: this.mode, budgetStepsPct: this.d.cfg.helius.steps_pct, targetedStats: this.targeted?.stats ?? null, trackedWallets: this.trackedWallets.size,
       holderChecks: this.holders?.stats ?? null, rss_mb: Math.round(process.memoryUsage().rss / 1e6),
+      providers: this.providerSummary(),
     });
   }
 

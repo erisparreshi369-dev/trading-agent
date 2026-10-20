@@ -136,3 +136,24 @@ notifier:
   trade_alerts: true                  # a message for every trade we follow (skipped ones go in the hourly summary)
   timezone: UTC                       # clock times in messages, e.g. Europe/London; daily limits still reset at 00:00 UTC
   usd_prices: true                    # show dollar amounts next to SOL (SOL price from CoinGecko, refreshed every 10 min)
+
+providers:
+  # Where market data comes from. Keys live in .env (key_env names the variable); a provider whose
+  # key is missing is simply not used. {key} in an address is replaced by the key.
+  list:
+    helius: { key_env: HELIUS_API_KEY, ws: "wss://mainnet.helius-rpc.com/?api-key={key}", http: "https://mainnet.helius-rpc.com/?api-key={key}" }
+    drpc:   { key_env: DRPC_API_KEY,   ws: "wss://lb.drpc.org/ogws?network=solana&dkey={key}", http: "https://lb.drpc.org/ogrpc?network=solana&dkey={key}" }
+    ankr:   { key_env: ANKR_API_KEY,   ws: "wss://rpc.ankr.com/solana/ws/{key}", http: "https://rpc.ankr.com/solana/{key}" }
+  # Which providers each job may use, best first. failover = use the first healthy one.
+  # (Step 2 adds mode "redundant" for following: listen on two at once, keep the first copy.)
+  jobs:
+    following: { use: [helius, drpc, ankr], mode: failover }  # traders we copy, their coins, our open trades
+    discovery: { use: [helius], mode: failover }              # the full stream; too big for the free backups
+    lookups:   { use: [helius, drpc, ankr], mode: failover }  # holder and safety checks
+    history:   { use: [helius], mode: failover }              # only Helius has the cheap history method
+  health:
+    errors_in_a_row: 3         # this many failures in a row = unhealthy
+    timeout_s: 10              # a request slower than this counts as a failure
+    silent_s: 60               # a live stream with no message for this long = unhealthy
+    budget_pct: 90             # a provider past this share of its daily budget = unhealthy
+    switch_back_after_healthy_s: 120   # go back to a better provider only after it's been healthy this long

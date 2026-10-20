@@ -23,6 +23,8 @@ export interface TradeRow {
   ix_name: string | null;
   source: string;
   venue: "curve" | "amm";
+  /** provider that delivered it first (helius | drpc | ankr) */
+  data_source?: string | null;
 }
 
 export interface TokenRow {
@@ -63,10 +65,10 @@ export class Store {
     this.stmts = {
       trade: db.prepare(`INSERT OR IGNORE INTO trades (signature, ev_index, slot, block_time, received_at, mint, wallet,
         is_buy, sol_lamports, token_amount, v_sol_reserves, v_token_reserves, real_sol_reserves, real_token_reserves,
-        fee_lamports, creator_fee_lamports, price_sol, is_dev, ix_name, source, venue)
+        fee_lamports, creator_fee_lamports, price_sol, is_dev, ix_name, source, venue, data_source)
         VALUES (@signature, @ev_index, @slot, @block_time, @received_at, @mint, @wallet, @is_buy, @sol_lamports,
         @token_amount, @v_sol_reserves, @v_token_reserves, @real_sol_reserves, @real_token_reserves, @fee_lamports,
-        @creator_fee_lamports, @price_sol, @is_dev, @ix_name, @source, @venue)`),
+        @creator_fee_lamports, @price_sol, @is_dev, @ix_name, @source, @venue, @data_source)`),
       holder: db.prepare(`INSERT INTO token_holders (mint, wallet, balance, updated_at) VALUES (?, ?, MAX(0, ?), ?)
         ON CONFLICT(mint, wallet) DO UPDATE SET balance = MAX(0, balance + ?), updated_at = excluded.updated_at`),
       // Two sources report the same token; keep the first non-null value for each field.
@@ -132,7 +134,7 @@ export class Store {
       for (const k of tokens) s.token.run(fillToken(k));
       for (const t of trades) {
         // only count a trade towards holder balances the first time we see it
-        if (s.trade.run(t).changes === 1) {
+        if (s.trade.run({ ...t, data_source: t.data_source ?? null }).changes === 1) {
           const delta = t.is_buy ? t.token_amount : -t.token_amount;
           s.holder.run(t.mint, t.wallet, delta, t.received_at, delta);
         }

@@ -20,6 +20,8 @@ export const log = pino({
     censor: "[redacted]",
   },
   hooks: {
+    // last line of defence: no key reaches a log file, whatever code logged it
+    streamWrite: (line: string) => scrubSecrets(line),
     logMethod(args, method, level) {
       if (sink && (level >= 50 || (level === 40 && typeof args[0] === "object" && (args[0] as { alert?: boolean })?.alert))) {
         try {
@@ -37,11 +39,19 @@ export const log = pino({
 });
 
 export function scrubUrl(url: string): string {
-  return url.replace(/(api[-_]?key=)[^&\s"']+/gi, "$1***");
+  return url.replace(/((?:api[-_]?key|dkey)=)[^&\s"']+/gi, "$1***");
+}
+
+const secrets = new Set<string>();
+
+/** Remember a secret's exact value so scrubSecrets removes it wherever it appears, whatever its shape. */
+export function registerSecret(value: string | undefined): void {
+  if (value && value.length >= 8) secrets.add(value);
 }
 
 /** Remove anything token-shaped from text that is about to leave the machine. */
 export function scrubSecrets(text: string): string {
+  for (const s of secrets) text = text.split(s).join("***");
   return scrubUrl(text)
     .replace(/\b(bot)?\d{6,}:[A-Za-z0-9_-]{30,}/g, "***") // Telegram bot tokens, with or without the URL's "bot" prefix
     .replace(/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi, "***");

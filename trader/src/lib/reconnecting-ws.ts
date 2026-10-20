@@ -17,7 +17,8 @@ export interface ReconnectingWsOptions {
 /**
  * Websocket that never gives up: exponential backoff with jitter, ping keepalive, and a
  * stale-stream watchdog (a socket can stay "open" while silently delivering nothing).
- * Emits: 'message' (raw string, bytes), 'up', 'down' (reason).
+ * Emits: 'message' (raw string, bytes), 'up', 'down' (reason, once per outage),
+ * 'failed' (reason, on every connection attempt that closes without ever opening).
  */
 export class ReconnectingWs extends EventEmitter {
   private ws?: WebSocket;
@@ -93,7 +94,9 @@ export class ReconnectingWs extends EventEmitter {
     ws.on("error", (err) => log.warn({ ws: this.o.name, err: err.message }, "ws error"));
     ws.on("close", (code, reason) => {
       this.clearTimers();
-      this.markDown(`close ${code} ${reason.toString()}`.trim());
+      const why = `close ${code} ${reason.toString()}`.trim();
+      if (!this.isUp && !this.stopped) this.emit("failed", why); // a reconnect attempt that never got through
+      this.markDown(why);
       if (this.stopped) return;
       const delay = this.backoff();
       log.warn({ ws: this.o.name, code, delay, url: scrubUrl(this.o.url) }, "ws closed, will reconnect");

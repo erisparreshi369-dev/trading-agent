@@ -4,7 +4,7 @@ import { encodeAmmTrade, PUMPSWAP_PROGRAM } from "../src/collector/amm-events.js
 import { Collector } from "../src/collector/collector.js";
 import { bondingCurve, canonicalPool } from "../src/collector/pools.js";
 import { encodeCreate, encodeMigration, encodeTrade, PUMP_PROGRAM, WSOL_MINT } from "../src/collector/pump-events.js";
-import type { CollectorConfig } from "../src/lib/config.js";
+import type { CollectorConfig, ProvidersConfig } from "../src/lib/config.js";
 import { openDb, type DB } from "../src/lib/db.js";
 import { setAlertSink } from "../src/lib/log.js";
 import { ReconnectingWs } from "../src/lib/reconnecting-ws.js";
@@ -110,7 +110,7 @@ const programLogs = (program: string, ...datas: Buffer[]) => [
 const pumpLogs = (...d: Buffer[]) => programLogs(PUMP_PROGRAM, ...d);
 const count = (db: DB, sql: string, ...a: unknown[]) => (db.prepare(sql).get(...a) as { n: number }).n;
 
-async function startCollector(over: Partial<CollectorConfig> = {}, opts: { pumpportal?: boolean; now?: () => number; db?: DB } = {}) {
+async function startCollector(over: Partial<CollectorConfig> = {}, opts: { pumpportal?: boolean; now?: () => number; db?: DB; providers?: ProvidersConfig } = {}) {
   const fire = await fakeServer();
   const tgt = await fakeServer();
   const pp = await fakeServer();
@@ -118,6 +118,7 @@ async function startCollector(over: Partial<CollectorConfig> = {}, opts: { pumpp
   const db = opts.db ?? openDb(":memory:");
   const c = new Collector({
     db, cfg: baseCfg({ pumpportal_streams: opts.pumpportal ?? false, ...over }), firehoseUrl: fire.url, targetedUrl: tgt.url, pumpportalUrl: pp.url, now: opts.now,
+    providers: opts.providers,
   });
   c.start();
   cleanups.push(() => c.stop());
@@ -304,6 +305,39 @@ describe("Collector: Helius budget", () => {
     expect(c.streams.firehoseOff).toBe("off-hours");
     expect(db.prepare("SELECT reason FROM collector_gaps WHERE source = 'firehose'").get()).toEqual({ reason: "off-hours" });
   });
+});
+
+describe("Collector: provider layer", () => {
+  const providers = (): ProvidersConfig => ({ ...testConfig().providers, health: { ...testConfig().providers.health, errors_in_a_row: 3 } });
+
+  it("saves which provider delivered each trade, and notes the provider each job starts with", async () => {
+    const { db, fire } = await startCollector({}, { providers: providers() });
+    await until(() => fire.received.length === 1);
+    fire.push(notify("sigP", 7, pumpLogs(encodeTrade(sampleTrade()))));
+    await until(() => count(db, "SELECT count(*) n FROM trades") === 1);
+    expect(db.prepare("SELECT data_source FROM trades").get()).toEqual({ data_source: "helius" });
+    const ev = db.prepare("SELECT job, from_provider, to_provider FROM provider_events ORDER BY job").all();
+    expect(ev).toEqual(expect.arrayContaining([
+      { job: "following", from_provider: null, to_provider: "helius" },
+      { job: "discovery", from_provider: null, to_provider: "helius" },
+    ]));
+  });
+
+  it("an unreachable provider is marked unhealthy after 3 failed connects, and the switch is written down", async () => {
+    const { db, c, fire, tgt } = await startCollector({}, { providers: providers() });
+    await until(() => fire.received.length === 1 && tgt.connections === 1);
+    await fire.close(); // Helius gone: every reconnect attempt now fails
+    await tgt.close();
+    await until(() => count(db, "SELECT count(*) n FROM provider_events WHERE job = 'following' AND to_provider IS NULL") === 1, 15_000);
+    const e = db.prepare("SELECT from_provider, reason FROM provider_events WHERE job = 'following' AND to_provider IS NULL").get() as { from_provider: string; reason: string };
+    expect(e.from_provider).toBe("helius");
+    expect(e.reason).toMatch(/^no usable provider \(helius: \d+ failures in a row: (firehose|targeted) stream/);
+    expect(c.activeProviders.following).toBeNull();
+    // the heartbeat carries it for the dashboard
+    c["beat"]();
+    const hb = JSON.parse((db.prepare("SELECT info FROM service_heartbeats WHERE service = 'collector'").get() as { info: string }).info);
+    expect(hb.providers.health.helius).toMatchObject({ healthy: false, lastError: expect.stringMatching(/stream/) });
+  }, 20_000);
 });
 
 describe("Collector: retention", () => {
