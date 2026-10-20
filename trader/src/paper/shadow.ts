@@ -101,7 +101,7 @@ export class ShadowBook {
         const reasons = v.filters ? rejectReasons(f, v.filters, this.inCooldown(v, t.mint, t.received_at)) : [];
         ins.run(signalId, v.name, t.mint, t.wallet, t.received_at, reasons.length ? "filtered" : "pending", reasons.length ? JSON.stringify(reasons) : null, v.sizeSol);
       }
-    })();
+    }).immediate(); // read-then-write: take the write lock up front, or a concurrent writer makes SQLite fail fast with SQLITE_BUSY
     this.stats.recorded++;
   }
 
