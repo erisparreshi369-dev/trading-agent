@@ -30,4 +30,33 @@ export const RISK = Object.freeze({
   MIN_FREE_BALANCE_SOL: 0.05,
 });
 
-export type RiskLimits = typeof RISK;
+export type RiskLimits = { readonly [K in keyof typeof RISK]: number };
+
+/**
+ * PRACTICE WITHOUT PORTFOLIO LIMITS (owner's decision, 2026-10-20): paper trading collects more
+ * data with the portfolio limits lifted. It applies ONLY to paper trading: live trading always gets
+ * RISK, whatever this says. The exits (stop loss, time exit) and the manual kill switch stay.
+ * Like every limit here it is a constant: switching back to practising with the real limits means
+ * setting this to false, committing and restarting.
+ */
+export const PAPER_NO_LIMITS = true;
+
+const NONE = Number.POSITIVE_INFINITY;
+
+/** RISK with every portfolio limit lifted (sizing stays 2% of equity; you still can't spend SOL you don't have). */
+export const PAPER_TEST_RISK: RiskLimits = Object.freeze({
+  ...RISK,
+  MAX_POSITION_SOL: NONE,
+  MIN_POSITION_SOL: 0,
+  MAX_OPEN_POSITIONS: NONE,
+  MAX_ENTRIES_PER_DAY: NONE,
+  MAX_WALLET_SHARE: NONE,
+  DAILY_LOSS_CAP_PCT: NONE,
+  MAX_DRAWDOWN_PCT: NONE,
+  MIN_FREE_BALANCE_SOL: 0,
+});
+
+/** The limits for a trading mode. Live always gets the real ones. */
+export function limitsFor(mode: "paper" | "live"): RiskLimits {
+  return mode === "paper" && PAPER_NO_LIMITS ? PAPER_TEST_RISK : RISK;
+}

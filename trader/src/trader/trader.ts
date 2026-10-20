@@ -5,6 +5,7 @@ import { log } from "../lib/log.js";
 import { PaperEngine } from "../paper/engine.js";
 import { ShadowBook } from "../paper/shadow.js";
 import { RiskManager } from "../risk/risk-manager.js";
+import { limitsFor } from "../risk/limits.js";
 import { SignalEngine, type LeaderTrade } from "../signals/engine.js";
 import type { TokenInfoSource } from "../signals/token-info.js";
 
@@ -34,7 +35,8 @@ export class Trader {
     killFile: string,
     private now: () => number = Date.now,
   ) {
-    this.risk = new RiskManager(db, killFile, now);
+    // paper trading: practice limits (limits.ts PAPER_NO_LIMITS); the Phase 5 live executor must use limitsFor("live")
+    this.risk = new RiskManager(db, killFile, now, limitsFor("paper"));
     this.paper = new PaperEngine(db, cfg.paper, this.risk, now);
     this.signals = new SignalEngine(db, cfg.signals, info, this.paper, now);
     this.shadow = new ShadowBook(db, cfg, now);

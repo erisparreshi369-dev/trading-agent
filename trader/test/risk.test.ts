@@ -4,7 +4,7 @@ import { join, resolve } from "node:path";
 import YAML from "yaml";
 import { describe, expect, it } from "vitest";
 import { ConfigSchema, ROOT } from "../src/lib/config.js";
-import { RISK } from "../src/risk/limits.js";
+import { limitsFor, PAPER_NO_LIMITS, PAPER_TEST_RISK, RISK } from "../src/risk/limits.js";
 import { RiskManager, type AccountSnapshot } from "../src/risk/risk-manager.js";
 import { clock, memDb } from "./helpers.js";
 
@@ -122,5 +122,46 @@ describe("RiskManager exits", () => {
     expect(r.checkExit(p, 2)).toBeNull();
     c.advance(1);
     expect(r.checkExit(p, 2)).toBe("time_exit");
+  });
+});
+
+describe("practice trading without portfolio limits (limits.ts PAPER_NO_LIMITS)", () => {
+  const paper = (c = clock()) => new RiskManager(memDb(), killFile(), c.now, limitsFor("paper"));
+
+  it("is the owner's current choice, a frozen constant, and only for paper: live always gets the real limits", () => {
+    expect(PAPER_NO_LIMITS).toBe(true);
+    expect(Object.isFrozen(PAPER_TEST_RISK)).toBe(true);
+    expect(limitsFor("live")).toBe(RISK);
+    expect(limitsFor("paper")).toBe(PAPER_TEST_RISK);
+  });
+
+  it("no cap on open positions, entries per day, one leader's share or position size", () => {
+    const r = paper();
+    expect(r.checkEntry(acct({ openPositions: 500, entriesToday: 5000, leaderRecentEntries: 20 }))).toEqual({ ok: true, sizeSol: 0.02 });
+    expect(r.checkEntry(acct({ equity: 100, freeBalance: 100, startBalance: 100 }))).toEqual({ ok: true, sizeSol: 2 }); // 2% of equity, no 0.05 cap
+    expect(r.checkEntry(acct({ equity: 0.2, freeBalance: 0.2 }))).toEqual({ ok: true, sizeSol: 0.004 }); // no minimum size
+  });
+
+  it("still can't spend SOL it doesn't have", () => {
+    expect(paper().checkEntry(acct({ freeBalance: 0.01 }))).toMatchObject({ ok: false });
+  });
+
+  it("no daily loss halt and no automatic kill switch on drawdown", () => {
+    const c = clock();
+    const r = paper(c);
+    r.tick({ equity: 1, startBalance: 1 });
+    r.tick({ equity: 0.2, startBalance: 1 }); // -80%
+    expect(r.haltedToday()).toBe(false);
+    expect(r.isKilled().killed).toBe(false);
+    expect(r.checkEntry(acct({ equity: 0.2, freeBalance: 0.2 })).ok).toBe(true);
+  });
+
+  it("keeps the exits and the manual kill switch", () => {
+    const c = clock();
+    const r = paper(c);
+    expect(r.checkExit({ entryPrice: 1, openedAt: c.t }, 0.74)).toBe("stop_loss");
+    expect(r.checkExit({ entryPrice: 1, openedAt: c.t - RISK.TIME_EXIT_MS }, 1)).toBe("time_exit");
+    r.kill("make kill");
+    expect(r.checkEntry(acct())).toEqual({ ok: false, reason: "kill switch: make kill" });
   });
 });
