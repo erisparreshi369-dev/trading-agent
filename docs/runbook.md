@@ -43,6 +43,15 @@ systemd runs `trading-failure@` on every crash, even when `Restart=` brings the 
 
 After a reboot everything starts by itself (linger). `make drill` re-verifies recovery end to end.
 
+## MadeOnSol helper (optional)
+
+| symptom | meaning / fix |
+|---|---|
+| `DATA HELPER · 70% / 90%` message | the daily job used that share of the 200 free requests; at 90% it stops. Trading is not affected |
+| `DATA HELPER · used up` | MadeOnSol refused more requests today (often: requests made by hand). Resets 00:00 UTC |
+| dashboard "last error" | `make logs S=intel`. `http 401` = key wrong or missing in `.env`; timeouts = MadeOnSol slow (nothing to do) |
+| want it off | `madeonsol.enabled: false` in config, or remove the key from `.env` |
+
 ## Collector
 
 | symptom | meaning / fix |

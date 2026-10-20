@@ -5,7 +5,8 @@
  * a day's budget last instead of hitting a wall:
  *
  *   normal          everything (firehose in its hours, tracked wallets, their tokens, pools)
- *   light           70%: firehose off (no new wallet discovery), no post-migration pool watching
+ *   light           70%: firehose off (no new wallet discovery), no post-migration pool watching,
+ *                   no candidate wallets on trial
  *   essential       85%: only tracked wallets, tokens they traded in the last 30 min, open trades
  *   positions_only  95%: only open trades; the trader opens no new ones until 00:00 UTC
  *   off             100% and nothing open: Helius streams stopped until 00:00 UTC
@@ -20,6 +21,8 @@ export type DataMode = "normal" | "light" | "essential" | "positions_only" | "of
 export const WATCH_POSITION = "paper position";
 export const WATCH_TOKEN = "tracked wallet trade";
 export const WATCH_POOL = "migrated with tracked holders";
+/** Ranked wallets on a trial watch (intel job), so scoring can judge them on full data. */
+export const WATCH_CANDIDATE = "candidate wallet";
 /** In essential mode, keep watching a tracked wallet's token only this long after its trade. */
 export const ESSENTIAL_TOKEN_MS = 30 * 60_000;
 
@@ -49,7 +52,7 @@ export function keepWatch(m: DataMode, row: { reason: string | null; until: numb
     case "normal":
       return true;
     case "light":
-      return row.reason !== WATCH_POOL;
+      return row.reason !== WATCH_POOL && row.reason !== WATCH_CANDIDATE;
     case "essential":
       return row.reason === WATCH_TOKEN && now - (row.until - tokenWatchMs) < ESSENTIAL_TOKEN_MS;
     default:

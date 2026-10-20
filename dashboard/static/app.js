@@ -79,12 +79,28 @@ function render(s) {
   renderWallets(s.wallets);
   renderLatency(s.latency);
   renderLearner(s.learner);
+  if (s.madeonsol) renderMadeOnSol(s.madeonsol);
+}
+
+function renderMadeOnSol(m) {
+  const left = Math.max(0, m.limit - m.used_today);
+  const job = m.job || {};
+  $("madeonsol").innerHTML = `${!m.enabled ? `<div class="muted">Switched off in config.</div>` : ""}
+    ${meter("Requests used today", m.used_today, m.limit, int)}
+    <dl class="kv"><dt>budget left</dt><dd>${int(left)} today <span class="muted">(the job stops at ${int(m.stop_at)}; resets 00:00 UTC)</span></dd>
+      <dt>last success</dt><dd>${agoSpan(m.last_ok_at)}</dd>
+      <dt>last error</dt><dd>${m.last_error_at ? `${agoSpan(m.last_error_at)} · <span class="muted">${esc(m.last_error)}</span>` : "none"}</dd>
+      <dt>daily job</dt><dd>${m.job_at ? `ran ${agoSpan(m.job_at)}: ${int(job.coins)} coins, ${int(job.creators)} creators, ${int(job.requests)} requests` : "not run yet"}
+        ${m.next_run_at ? ` · next ${until(m.next_run_at)}` : ""}</dd>
+      <dt>stored</dt><dd>${int(m.creators)} creator records · ${int(m.candidates_on_trial)} ranked traders on a 7-day trial watch</dd></dl>
+    <div class="muted">Never used while deciding a trade: the bot reads only what this job stored before.</div>`;
 }
 
 function renderFlags(s) {
   const f = [];
   if (s.risk.killed) f.push(`<span class="flag bad">⛔ KILL SWITCH ON</span>`);
   if (s.risk.halted) f.push(`<span class="flag warn">⏸ HALTED until 00:00 UTC</span>`);
+  if (s.risk.paper_no_limits && s.mode !== "LIVE") f.push(`<span class="flag warn">practice: limits off</span>`);
   const down = s.services.filter((x) => !x.ok).map((x) => x.name);
   if (down.length) f.push(`<span class="flag bad">✖ ${esc(down.join(", "))} not OK</span>`);
   if (s.data.warnings.length) f.push(`<span class="flag warn">⚠ feed quiet</span>`);
@@ -173,6 +189,9 @@ function renderClosed(rows) {
 }
 
 function meter(label, used, cap, fmt) {
+  if (cap === null || cap === undefined) {
+    return `<div class="meter"><div class="row"><span>${label}</span><span class="num">${fmt(used)} <span class="muted">· no limit (practice)</span></span></div></div>`;
+  }
   const frac = isNum(used) && cap ? used / cap : 0;
   const level = frac >= 1 ? "bad" : frac >= 0.6 ? "warn" : "";
   return `<div class="meter ${level}"><div class="row"><span>${label}</span><span class="num">${fmt(used)} / ${fmt(cap)}</span></div>
@@ -182,7 +201,8 @@ function meter(label, used, cap, fmt) {
 function renderRisk(r) {
   const p0 = (x) => pct(x, 1, false);
   const L = r.limits || {};
-  $("risk").innerHTML = `<div class="state-row">
+  $("risk").innerHTML = `${r.paper_no_limits ? `<div class="warnbox">Practice trading without limits: no cap on open trades, trades per day, size or losses. Real-money limits stay locked. Stop loss, 30-min exit and the emergency stop still work.</div>` : ""}
+    <div class="state-row">
       <span class="pill ${r.killed ? "bad" : "ok"}">${r.killed ? "⛔ kill switch ON" : "✔ kill switch off"}</span>
       <span class="pill ${r.halted ? "warn" : "ok"}">${r.halted ? "⏸ halted for today" : "✔ not halted"}</span></div>
     ${r.killed ? `<div class="muted">${esc(r.kill_reason || "")} ${r.kill_at ? "· " + stamp(r.kill_at) : ""}</div>` : ""}
@@ -190,10 +210,10 @@ function renderRisk(r) {
     ${meter("Drawdown from start vs cap", r.drawdown, r.drawdown_cap, p0)}
     ${meter("Open positions", r.open, r.max_open, int)}
     ${meter("Entries today", r.entries_today, r.max_entries, int)}
-    <dl class="kv"><dt>position size</dt><dd>${p0(L.MAX_POSITION_PCT)} of equity, max ${L.MAX_POSITION_SOL} SOL</dd>
+    <dl class="kv"><dt>position size</dt><dd>${p0(L.MAX_POSITION_PCT)} of equity${r.paper_no_limits ? " (no cap in practice)" : `, max ${L.MAX_POSITION_SOL} SOL`}</dd>
       <dt>stop loss</dt><dd>−${p0(L.STOP_LOSS_PCT)}</dd><dt>time exit</dt><dd>${dur(L.TIME_EXIT_MS / 1000)}</dd>
       <dt>reserve</dt><dd>${L.MIN_FREE_BALANCE_SOL} SOL kept free</dd></dl>
-    <div class="muted">Hard limits from trader/src/risk/limits.ts. Daily cap resets 00:00 UTC; the kill switch needs <span class="mono">make unkill</span>.</div>`;
+    <div class="muted">${r.paper_no_limits ? "Real-money limits (locked, used for live trading)" : "Hard limits"} from trader/src/risk/limits.ts. Daily cap resets 00:00 UTC; the kill switch needs <span class="mono">make unkill</span>.</div>`;
 }
 
 function renderData(d) {

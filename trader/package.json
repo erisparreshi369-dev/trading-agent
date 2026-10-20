@@ -18,7 +18,8 @@
     "kill": "tsx src/tools/kill.ts kill",
     "unkill": "tsx src/tools/kill.ts unkill",
     "telegram:setup": "tsx src/tools/telegram-setup.ts",
-    "notifier": "node dist/notifier/index.js"
+    "notifier": "node dist/notifier/index.js",
+    "intel": "node dist/intel/index.js"
   },
   "dependencies": {
     "@solana/web3.js": "^1.99.0",

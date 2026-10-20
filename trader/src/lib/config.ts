@@ -90,6 +90,9 @@ const SignalsSchema = z
     confirmation_window_s: z.number().positive(),
     reentry_cooldown_s: z.number().nonnegative(),
     min_score: z.number(),
+    exclude_bad_creators: z.boolean(),
+    bad_creator_min_launches: z.number().int().positive(),
+    bad_creator_max_success: z.number().min(0).max(1),
   })
   .strict();
 
@@ -174,8 +177,28 @@ const ProvidersSchema = z
   .strict()
   .refine((p) => Object.values(p.jobs).every((j) => j.use.every((n) => n in p.list)), "every provider a job uses must be in providers.list");
 
+// MadeOnSol: an optional helper for the daily intel job only (never called while deciding a trade).
+const MadeOnSolSchema = z
+  .object({
+    enabled: z.boolean(),
+    key_env: z.string().regex(/^[A-Z_]+$/),
+    base_url: z.string().url(),
+    daily_requests: z.number().int().positive(),
+    warn_pct: z.number().min(1).max(99),
+    stop_pct: z.number().min(1).max(100),
+    timeout_s: z.number().positive().max(30),
+    per_minute: z.number().int().positive(),
+    creator_batches: z.number().int().nonnegative(),
+    candidates: z.object({ watch_top: z.number().int().nonnegative(), watch_days: z.number().positive(), min_hold_minutes: z.number().nonnegative() }).strict(),
+  })
+  .strict()
+  .refine((m) => m.warn_pct < m.stop_pct, "warn_pct must be below stop_pct");
+
 export const ConfigSchema = z
-  .object({ collector: CollectorSchema, scoring: ScoringSchema, signals: SignalsSchema, paper: PaperSchema, shadow: ShadowSchema, notifier: NotifierSchema, providers: ProvidersSchema })
+  .object({
+    collector: CollectorSchema, scoring: ScoringSchema, signals: SignalsSchema, paper: PaperSchema, shadow: ShadowSchema, notifier: NotifierSchema,
+    providers: ProvidersSchema, madeonsol: MadeOnSolSchema,
+  })
   .strict();
 
 export type Config = z.infer<typeof ConfigSchema>;
@@ -187,6 +210,7 @@ export type ShadowConfig = z.infer<typeof ShadowSchema>;
 export type ShadowExitConfig = z.infer<typeof ExitSchema>;
 export type NotifierConfig = z.infer<typeof NotifierSchema>;
 export type ProvidersConfig = z.infer<typeof ProvidersSchema>;
+export type MadeOnSolConfig = z.infer<typeof MadeOnSolSchema>;
 export type ProviderName = z.infer<typeof ProviderName>;
 export type JobName = keyof ProvidersConfig["jobs"];
 

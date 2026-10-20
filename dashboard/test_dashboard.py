@@ -80,6 +80,9 @@ class DashboardData(unittest.TestCase):
         for k in ("MAX_OPEN_POSITIONS", "DAILY_LOSS_CAP_PCT", "MAX_DRAWDOWN_PCT", "MAX_ENTRIES_PER_DAY", "STOP_LOSS_PCT", "TIME_EXIT_MS"):
             self.assertIn(k, L)
         self.assertEqual(L["TIME_EXIT_MS"], 30 * 60_000)
+        # the real-money block, not the practice one further down in limits.ts
+        self.assertEqual((L["MIN_POSITION_SOL"], L["MAX_OPEN_POSITIONS"], L["MIN_FREE_BALANCE_SOL"]), (0.01, 5, 0.05))
+        self.assertTrue(data.paper_no_limits())
 
     def test_snapshot(self):
         s = data.Snapshot(self.c, self.path).build({}, NOW)
@@ -106,6 +109,18 @@ class DashboardData(unittest.TestCase):
         self.assertEqual(lat["decide"]["n"], 2)
         self.assertEqual(lat["fill"]["p50"], 1200)
         self.assertEqual(len(s["closed"]), 2)
+
+    def test_madeonsol_panel(self):
+        w = connect(str(self.path))
+        w.execute("INSERT INTO intel_requests (ts, provider, endpoint, ok, remote_used) VALUES (?, 'madeonsol', 'token/batch', 1, 12)", (NOW - 60_000,))
+        w.execute("INSERT INTO intel_requests (ts, provider, endpoint, ok, error) VALUES (?, 'madeonsol', 'me', 0, 'http 500 msk_abcdefSECRET123')", (NOW - 30_000,))
+        w.execute("INSERT INTO intel_requests (ts, provider, endpoint, ok) VALUES (?, 'madeonsol', 'me', 1)", (NOW - 2 * 86_400_000,))  # another day
+        w.close()
+        m = data.Snapshot(self.c, self.path).build({}, NOW)["madeonsol"]
+        self.assertEqual((m["used_today"], m["limit"], m["stop_at"]), (12, 200, 180))  # MadeOnSol's own count (12) beats our 2
+        self.assertEqual(m["last_ok_at"], NOW - 60_000)
+        self.assertEqual(m["last_error_at"], NOW - 30_000)
+        self.assertEqual(m["last_error"], "me: http 500 msk_***")
 
     def test_feed_seed_and_poll(self):
         f = data.Feed(self.c)

@@ -25,6 +25,12 @@ export function cheapReasons(f: Features, c: SignalsConfig, inCooldown: boolean)
   if (f.venue === "curve" && (liq < c.min_real_sol || liq > c.max_real_sol)) reasons.push(`curve SOL ${liq.toFixed(2)} outside [${c.min_real_sol}, ${c.max_real_sol}]`);
   if ((f.confirmations as number) < c.min_confirmations) reasons.push(`${f.confirmations} tracked buyers < ${c.min_confirmations}`);
   if (inCooldown) reasons.push("re-entry cooldown");
+  // creator record stored before the decision (daily MadeOnSol job); unknown creators pass
+  const launches = f.creator_launches;
+  if (c.exclude_bad_creators && typeof launches === "number" && launches >= c.bad_creator_min_launches
+    && (f.creator_success_rate as number) <= c.bad_creator_max_success) {
+    reasons.push(`bad creator: ${launches} launches, ${Math.round((f.creator_success_rate as number) * 100)}% filled their curve`);
+  }
   return reasons;
 }
 

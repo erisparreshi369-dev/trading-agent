@@ -23,6 +23,7 @@ from migrate import connect, migrate  # noqa: E402
 
 sys.path.insert(0, str(ROOT / "learner"))
 import experiments as ex  # noqa: E402
+import creator_section  # noqa: E402
 import slippage_section  # noqa: E402
 
 
@@ -217,6 +218,7 @@ def build(c: sqlite3.Connection, now_ms: int, days: int) -> str:
            table(["why we skipped", "times"], [[k, str(v)] for k, v in reasons.most_common(10)])]
 
     md += slippage_section.section(c, since, now_ms, table, sol, pct)
+    md += creator_section.section(c, since, now_ms, table, sol, pct)
 
     # ---- wallets ----
     tracked = c.execute("SELECT count(*) FROM tracked_wallets WHERE active = 1").fetchone()[0]

@@ -94,6 +94,12 @@ stored in `signals` with its reasons and features. Thresholds: `signals:` in `co
 **Risk manager** (`trader/src/risk/limits.ts`, constants, no setters, not in config; tests
 enforce all of this):
 
+> **Practice testing (since 2026-10-20): `PAPER_NO_LIMITS = true`.** Paper trading runs with the
+> portfolio limits below lifted (no cap on open positions, entries per day, leader share, size or
+> losses; sizing stays 2% of equity and it can't spend SOL it doesn't have). The stop loss, time
+> exit and manual kill switch stay. Live trading always uses the limits below (`limitsFor("live")`).
+> Back to practising with the real limits: set it to `false`, commit, restart.
+
 | limit | value |
 |---|---|
 | position size | 2% of equity, max 0.05 SOL, skip below 0.01 SOL |
@@ -131,6 +137,7 @@ without a login (linger), restarted 5s after any crash, logs in `logs/*.log` rot
 | `trading-trader` | signals, risk, paper engine | always |
 | `trading-notifier` | Telegram: trades, errors, watchdog, daily summary, reports, commands | always |
 | `trading-dashboard` | read-only live web dashboard, http://localhost:8080 | always |
+| `trading-intel.timer` | optional MadeOnSol job: creator records, early-buyer scores, candidate wallets | daily 00:02 UTC |
 | `trading-score.timer` | wallet re-scoring | daily 00:15 UTC |
 | `trading-weekly.timer` | weekly report → Telegram (model retraining joins in Phase 4) | Sundays 01:00 UTC |
 | `trading-logrotate.timer` | log rotation | daily 03:30 UTC |
@@ -141,6 +148,23 @@ service that died without a clean shutdown (kill, OOM, power loss) with a per-da
 systemd gave up on (crash loop) or a failed timer job, sent by `curl` so it works even when the
 notifier is down; daily summary 00:05 UTC; weekly report as a file.
 **Commands**: `/status`, `/pnl`, `/stop` (kill switch), accepted only from the owner's chat.
+
+**MadeOnSol** (optional, `trader/src/intel/`, key `MADEONSOL_API_KEY`): a helper for a daily job
+only, never called while deciding a trade. Free plan: 200 requests/day (60/min); a batch of up to
+50 coins is one request; live feeds are delayed 5 min and the stream is paid, so it is no data
+source for trading. The 00:02 UTC job (`make intel` to run it now) fetches, in this order:
+creator records + early-buyer scores for the coins we decided on in the last day (~8 requests),
+the two ranked-wallet lists (2), and records for creators who launch often (up to 60). Everything
+is stored with `source = 'madeonsol'` and `fetched_at`; the signal engine reads it from SQLite as
+features and only rows fetched before the decision (no look-ahead). The creator check
+(`signals.exclude_bad_creators`) is off for practice trades; the shadow variant `creator_check`
+measures it and the weekly report compares with/without. Ranked wallets are only candidates: the
+best 20 we don't follow get one 7-day trial watch (lowest priority, dropped first in light data
+mode) so our scoring can judge them on full data; listing never means following. Budget: every
+request is counted (ours or MadeOnSol's own count, whichever is higher), the job stops at 90%, and
+Telegram says so at 70%, 90% and when used up. Timeout 10 s per request; if MadeOnSol is down,
+slow or used up the job simply stores nothing and the bot runs as before. The key is scrubbed from
+every log line, message and the dashboard.
 
 **Dashboard** (`dashboard/`, Python stdlib only): one page with mode, services, live activity
 feed (launches, tracked-wallet trades, every signal with its reasons, paper fills, errors and
@@ -177,6 +201,7 @@ trader/src/notifier  Telegram client, alerts, watchdog, commands
 trader/src/tools     verify-live, explain-wallet, kill switch, telegram-setup
 learner/             weekly report (Phase 4: model training + backtest)
 dashboard/           read-only live dashboard (server.py, data.py, static/)
+trader/src/intel     optional MadeOnSol daily job (client with budget/timeout, jobs)
 deploy/              systemd unit templates, logrotate config
 scripts/             status, install-services, setup-host (sudo), deploy, drill
 config/config.yaml   tunables — no secrets, no risk limits

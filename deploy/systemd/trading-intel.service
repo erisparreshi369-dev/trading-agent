@@ -1,0 +1,11 @@
+[Unit]
+Description=trading-agent daily MadeOnSol intel (creator records, early-buyer scores, candidate wallets)
+OnFailure=trading-failure@%N.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=@ROOT@/trader
+ExecStart=@NODE@ dist/intel/index.js
+StandardOutput=append:@ROOT@/logs/intel.log
+StandardError=append:@ROOT@/logs/intel.log
+TimeoutStartSec=30min

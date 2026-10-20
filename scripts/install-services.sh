@@ -7,7 +7,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 UNIT_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
 NODE="$(command -v node)"
 SERVICES=(collector trader notifier dashboard)
-TIMERS=(score weekly logrotate)
+TIMERS=(score weekly logrotate intel)
 
 if [ "${1:-}" = "--uninstall" ]; then
   systemctl --user disable --now $(printf 'trading-%s.service ' "${SERVICES[@]}") $(printf 'trading-%s.timer ' "${TIMERS[@]}") 2>/dev/null || true

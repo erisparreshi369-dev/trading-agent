@@ -14,7 +14,7 @@ DB = Path(os.environ.get("DB_PATH", ROOT / "data/trading.db"))
 if not DB.is_absolute():
     DB = ROOT / DB
 SERVICES = ["collector", "trader", "notifier"]
-TIMERS = ["score", "weekly", "logrotate"]
+TIMERS = ["score", "weekly", "logrotate", "intel"]
 STALE_S = 300
 
 G, R, Y, D, B = "\033[32m", "\033[31m", "\033[33m", "\033[2m", "\033[1m"
@@ -165,10 +165,17 @@ def main() -> int:
         for src, st, en, why in gaps:
             dur = f"{((en or now) - st) / 1000:.0f}s" + ("" if en else " (open)")
             print(f"  {D}  {src:<10} {ago(st):>10}  {dur:>8}  {why}{X}")
+    if has_table(c, "intel_requests"):
+        n, remote, last_ok = q("SELECT count(*), MAX(remote_used), MAX(CASE WHEN ok = 1 THEN ts END) FROM intel_requests WHERE provider = 'madeonsol' AND ts >= ?",
+                               int(time.time() // 86400 * 86400 * 1000))
+        print(f"  madeonsol  {max(n, remote or 0):>10} / 200 requests today (daily job only, never while trading)  last ok {ago(last_ok)}")
     size = sum(p.stat().st_size for p in DB.parent.glob(DB.name + "*"))
     print(f"  db size    {size / 1e9:.2f} GB")
 
     print(f"\n{B}paper trading{X}")
+    lim = (ROOT / "trader/src/risk/limits.ts").read_text()
+    if "export const PAPER_NO_LIMITS = true" in lim:
+        print(f"  {Y}practice limits OFF{X} {D}(no cap on open trades, trades/day, size, losses; real-money limits stay locked){X}")
     acct = q("SELECT balance_sol, start_balance FROM paper_account WHERE id = 1") if has_table(c, "paper_account") else None
     if not acct:
         print(f"  {D}not started{X}")

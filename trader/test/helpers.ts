@@ -25,6 +25,7 @@ export function testConfig(over: { [K in keyof Config]?: Partial<Config[K]> } = 
     shadow: { ...c.shadow, ...over.shadow },
     notifier: { ...c.notifier, ...over.notifier },
     providers: { ...c.providers, ...over.providers },
+    madeonsol: { ...c.madeonsol, ...over.madeonsol },
   };
 }
 

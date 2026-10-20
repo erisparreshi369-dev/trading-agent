@@ -94,6 +94,24 @@ describe("wallet scoring", () => {
     expect(good.closed_positions).toBe(8);
   });
 
+  it("a ranked candidate on a trial watch is judged on full data (targeted streams cover it), only inside its trial", () => {
+    const full = (() => {
+      const db = memDb();
+      const m = market(db);
+      return scoreWallets(db, cfg.scoring, cfg.paper, m.now).find((s) => s.wallet === m.good)!.closed_positions;
+    })();
+    const db = memDb();
+    const m = market(db);
+    db.prepare("INSERT INTO collector_gaps (source, started_at, ended_at, reason) VALUES ('firehose', ?, ?, 'test')").run(T0, T0 + 3_600_000);
+    db.prepare("INSERT INTO candidate_watch (wallet, since, until) VALUES (?, ?, ?)").run(m.good, T0 - 3_600_000, T0 + 30 * 86_400_000);
+    expect(scoreWallets(db, cfg.scoring, cfg.paper, m.now).find((s) => s.wallet === m.good)!.closed_positions).toBe(full);
+    // a trial that started after the gap doesn't cover it
+    db.prepare("UPDATE candidate_watch SET since = ?").run(T0 + 3_600_000);
+    expect(scoreWallets(db, cfg.scoring, cfg.paper, m.now).find((s) => s.wallet === m.good)!.closed_positions).toBe(8);
+    // being listed is not being followed: only scoring adds wallets
+    expect(db.prepare("SELECT count(*) n FROM tracked_wallets").get()).toEqual({ n: 0 });
+  });
+
   it("updates the tracked set: adds the best, drops cold and rejected wallets, never touches manual ones", () => {
     const db = memDb();
     const m = market(db);

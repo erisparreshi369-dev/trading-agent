@@ -55,6 +55,28 @@ export class SignalEngine {
     private now: () => number = Date.now,
   ) {}
 
+  /**
+   * Creator record and early-buyer score from OUR database (written by the daily MadeOnSol job),
+   * only rows fetched before now: nothing here calls an API, and nothing from the future leaks in.
+   */
+  private storedIntel(mint: string, creator: string | null): Features {
+    const now = this.now();
+    const rep = creator
+      ? this.db.prepare(`SELECT total_deployed, total_bonded, fetched_at FROM creator_reputation WHERE creator = ? AND fetched_at <= ?
+          ORDER BY fetched_at DESC LIMIT 1`).get(creator, now) as { total_deployed: number | null; total_bonded: number | null; fetched_at: number } | undefined
+      : undefined;
+    const ebs = this.db.prepare(`SELECT early_buyer_score FROM token_intel WHERE mint = ? AND fetched_at <= ? AND early_buyer_score IS NOT NULL
+      ORDER BY fetched_at DESC LIMIT 1`).get(mint, now) as { early_buyer_score: number } | undefined;
+    const launches = rep?.total_deployed ?? null;
+    return {
+      creator_launches: launches,
+      creator_success_rate: launches ? +((rep!.total_bonded ?? 0) / launches).toFixed(4) : null,
+      creator_record_age_h: rep ? +((now - rep.fetched_at) / 3_600_000).toFixed(1) : null,
+      early_buyer_score: ebs?.early_buyer_score ?? null,
+      intel_source: rep || ebs ? "madeonsol" : null,
+    };
+  }
+
   setScoreAdjuster(fn: ScoreAdjuster): void {
     this.adjust = fn;
   }
@@ -82,6 +104,7 @@ export class SignalEngine {
         : null;
       f.leader_is_dev = tok.creator === t.wallet;
     }
+    Object.assign(f, this.storedIntel(t.mint, tok?.creator ?? null));
     const liquidity = t.venue === "curve" ? (t.real_sol_reserves ?? 0) / 1e9 : (t.v_sol_reserves ?? 0) / 1e9;
     f.liquidity_sol = +liquidity.toFixed(3);
     const since = t.received_at - c.confirmation_window_s * 1000;

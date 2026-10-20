@@ -260,6 +260,9 @@ export class Notifier {
           ok = await this.say(M.dataBudget(c, { pct: Number(data.pct), mbToday: Number(data.mbToday), capMb: Number(data.capMb),
             mbPerHour: Number(data.mbPerHour ?? 0), capAt: data.capAt == null ? null : Number(data.capAt) }));
           break;
+        case "madeonsol_budget":
+          ok = await this.say(M.helperBudget(c, { pct: Number(data.pct), used: Number(data.used), limit: Number(data.limit) }));
+          break;
         case "startup_blocked":
           ok = await this.say(M.startupBlocked(c, String(data.why ?? "")), { urgent: true });
           break;

@@ -105,6 +105,9 @@ export function scoreWallets(
   };
 
   const tracked = new Set((db.prepare("SELECT wallet FROM tracked_wallets WHERE active = 1").all() as { wallet: string }[]).map((r) => r.wallet));
+  // ranked wallets on a trial watch (intel job) are covered by targeted streams during the trial
+  const trial = new Map((db.prepare("SELECT wallet, since, until FROM candidate_watch").all() as { wallet: string; since: number; until: number }[])
+    .map((r) => [r.wallet, r]));
   const loadGaps = (sources: string[]) =>
     (db.prepare(`SELECT started_at s, COALESCE(ended_at, ?) e FROM collector_gaps WHERE source IN (${sources.map(() => "?").join(",")}) AND COALESCE(ended_at, ?) > ?`)
       .all(now, ...sources, now, since) as { s: number; e: number }[]).map((g) => ({ start: g.s, end: g.e }));
@@ -147,7 +150,9 @@ export function scoreWallets(
     const lastSeen = trades[trades.length - 1]!.received_at;
     for (const [wallet, wt] of byWallet) {
       for (const p of positionsOf(wallet, wt, tok, trades, lastSeen)) {
-        const gaps = tracked.has(wallet) ? targetedGaps : firehoseGaps;
+        const t = trial.get(wallet);
+        const watched = tracked.has(wallet) || (!!t && p.entryAt - 60_000 >= t.since && (p.exitAt ?? lastSeen) <= t.until);
+        const gaps = watched ? targetedGaps : firehoseGaps;
         if (overlaps(gaps, p.entryAt - 60_000, p.exitAt ?? lastSeen)) continue; // not fully observed
         onPosition?.(p);
         add(p);

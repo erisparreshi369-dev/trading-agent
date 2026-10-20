@@ -566,6 +566,7 @@ export function jobFailed(c: Ctx, job: string): string {
   const what: Record<string, { name: string; effect: string; step: string }> = {
     score: { name: "The nightly trader check", effect: "We keep copying yesterday's list of traders.", step: onComputer("make score", "this runs the check again") },
     weekly: { name: "The weekly report", effect: "Trading is not affected. Only the report is missing.", step: onComputer("make weekly", "this makes the report again") },
+    intel: { name: "The nightly MadeOnSol helper job", effect: "Trading is not affected. We just keep yesterday's creator records.", step: onComputer("make logs S=intel", "this shows what went wrong") },
     logrotate: { name: "The log cleaner", effect: "Old log files were not cleaned. If this keeps happening, the disk slowly fills up.", step: onComputer("df -h", "this shows how full the disk is") },
   };
   const w = what[job] ?? { name: "A planned job", effect: "Trading is not directly affected.", step: onComputer("make status", "this shows what is running") };
@@ -616,6 +617,22 @@ export function dataBudget(c: Ctx, d: { pct: number; mbToday: number; capMb: num
       "If you get this message most days, the free data is too small for this bot. A paid data plan costs $49 a month and gives about 10 times more.",
       "The free data is counted per day and starts again at midnight UTC.",
     ],
+  });
+}
+
+/** The optional MadeOnSol helper used 70% / 90% / all of its free requests for today. Trading never waits for it. */
+export function helperBudget(c: Ctx, d: { pct: number; used: number; limit: number }): string {
+  const why = d.pct >= 100 ? "No requests to MadeOnSol are left for today."
+    : d.pct >= 90 ? "The daily helper job stopped for today, so the last requests stay free for you."
+    : "That is still fine, the daily helper job is almost done.";
+  return render({
+    title: `DATA HELPER · ${d.pct >= 100 ? "MadeOnSol requests used up" : `${d.pct}% of today's MadeOnSol requests used`}`,
+    happened: `We used ${d.used} of the ${d.limit} free requests to MadeOnSol today.`,
+    mood: d.pct >= 90 ? "careful" : "normal",
+    why,
+    extra: ["Trading is not affected: the bot never waits for MadeOnSol."],
+    todo: d.pct >= 90 ? `Nothing. The requests start again by itself at ${midnight(c)}.` : NOTHING,
+    details: ["MadeOnSol gives us the past results of coin creators and lists of good traders.", `The free plan has ${d.limit} requests a day.`],
   });
 }
 
@@ -817,6 +834,8 @@ const EXPLAINERS: Explainer[] = [
     example: "Like a car with a warning light on. It still drives, but you should check it." },
   { match: /DATA ·/, simple: () => "This is about the market information the bot reads to trade.",
     example: "Like a weather app with no internet: it cannot show the weather." },
+  { match: /DATA HELPER/, simple: () => "MadeOnSol is an extra helper that tells us how a coin's creator did before. We may ask it a few times a day for free.",
+    example: "Like a free library card: a few books a day. When they are used up, you come back tomorrow." },
   { match: /EMERGENCY STOP/, simple: () => "All trading is stopped. The bot sold everything and buys nothing new.",
     example: "Like pressing the big red stop button on a machine." },
   { match: /SAFETY LIMIT/, simple: () => "We lost too much today, so the bot rests until tomorrow.",

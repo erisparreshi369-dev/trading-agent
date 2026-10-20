@@ -51,10 +51,18 @@ def utc_day_start(ms: int) -> int:
 
 # ---------------------------------------------------------------- source-file parameters
 
+def paper_no_limits(path: Path = ROOT / "trader/src/risk/limits.ts") -> bool:
+    """limits.ts PAPER_NO_LIMITS: practice trading without portfolio limits (live always keeps RISK)."""
+    m = re.search(r"export const PAPER_NO_LIMITS = (true|false)", path.read_text())
+    return bool(m and m.group(1) == "true")
+
+
 def risk_limits(path: Path = ROOT / "trader/src/risk/limits.ts") -> dict[str, float]:
-    """NAME: 30 * 60_000, -> {"NAME": 1800000}. Only numeric literals and products."""
+    """The real-money RISK block: NAME: 30 * 60_000, -> {"NAME": 1800000}. Only numeric literals and products."""
     out = {}
-    for name, expr in re.findall(r"^\s*([A-Z_]+):\s*([\d_.\s*]+),", path.read_text(), re.M):
+    text = path.read_text()
+    block = re.search(r"export const RISK = Object\.freeze\(\{(.*?)\n\}\);", text, re.S)
+    for name, expr in re.findall(r"^\s*([A-Z_]+):\s*([\d_.\s*]+),", block.group(1) if block else "", re.M):
         v = 1.0
         for part in expr.split("*"):
             v *= float(part.strip().replace("_", ""))
@@ -75,6 +83,22 @@ def paper_costs(path: Path = ROOT / "config/config.yaml") -> dict[str, float]:
         if key in out:
             out[key] = float(val)
     return out
+
+
+def madeonsol_limits(path: Path = ROOT / "config/config.yaml") -> dict[str, float]:
+    """madeonsol: daily_requests / stop_pct / warn_pct (flat scalars, no YAML dependency)."""
+    out = {"daily_requests": 200.0, "stop_pct": 90.0, "warn_pct": 70.0, "enabled": 1.0}
+    text = path.read_text() if path.exists() else ""
+    m = re.search(r"^madeonsol:\n((?:[ \t]+.*\n|\n)*)", text + "\n", re.M)
+    for k, v in re.findall(r"^  (\w+):\s*([\w.]+)", m.group(1) if m else "", re.M):
+        if k in out:
+            out[k] = 1.0 if v == "true" else 0.0 if v == "false" else float(v)
+    return out
+
+
+def scrub_keys(text: str | None) -> str | None:
+    """API keys never reach the page (MadeOnSol keys look like msk_...)."""
+    return re.sub(r"msk_[A-Za-z0-9_-]+", "msk_***", text) if text else text
 
 
 # ---------------------------------------------------------------- market math (mirrors trader/src/sim/market.ts)
@@ -187,6 +211,7 @@ class Snapshot:
             "data": self.data(now, info.get("collector", {})),
             "latency": self.cached("latency", 15, lambda: self.latency(now)),
             "learner": self.cached("learner", 30, lambda: self.learner(svc, info.get("scoring"), heartbeats.get("scoring"))),
+            "madeonsol": self.cached("madeonsol", 10, lambda: self.madeonsol(now, info.get("intel"), heartbeats.get("intel"), svc)),
         }
 
     # ---- 1. services
@@ -344,10 +369,12 @@ class Snapshot:
         L = self.limits
         rs = self.c.execute("SELECT * FROM risk_state WHERE id = 1").fetchone() if self.has("risk_state") else None
         kill_file = (ROOT / "data/KILL").exists()
+        no_limits = paper_no_limits()
         out = {
-            "limits": L, "open": len(positions), "max_open": L.get("MAX_OPEN_POSITIONS"),
+            "paper_no_limits": no_limits,
+            "limits": L, "open": len(positions), "max_open": None if no_limits else L.get("MAX_OPEN_POSITIONS"),
             "entries_today": self.one("SELECT count(*) FROM paper_positions WHERE entry_due_at >= ?", utc_day_start(now)) if self.has("paper_positions") else 0,
-            "max_entries": L.get("MAX_ENTRIES_PER_DAY"),
+            "max_entries": None if no_limits else L.get("MAX_ENTRIES_PER_DAY"),
             "killed": bool(rs and rs["kill_switch"]) or kill_file, "kill_reason": (rs["kill_reason"] if rs else None) or ("data/KILL file present" if kill_file else None),
             "kill_at": rs["kill_at"] if rs else None, "halted": bool(rs and rs["halted_day"] == utc_day(now)),
         }
@@ -355,9 +382,9 @@ class Snapshot:
             eq, start = money["equity"], money["start"]
             day_start = rs["day_start_equity"] if rs and rs["day"] == utc_day(now) and rs["day_start_equity"] else eq
             out["daily_loss"] = max(0.0, (day_start - eq) / day_start) if day_start else 0.0
-            out["daily_cap"] = L.get("DAILY_LOSS_CAP_PCT")
+            out["daily_cap"] = None if no_limits else L.get("DAILY_LOSS_CAP_PCT")
             out["drawdown"] = max(0.0, (start - eq) / start)
-            out["drawdown_cap"] = L.get("MAX_DRAWDOWN_PCT")
+            out["drawdown_cap"] = None if no_limits else L.get("MAX_DRAWDOWN_PCT")
         return out
 
     # ---- 7. data collection
@@ -418,6 +445,26 @@ class Snapshot:
             {"name": "fill", "desc": "decision → entry filled (paper: simulated landing)", **pct(fill)},
             {"name": "total", "desc": "leader tx → our fill", **pct(total)},
         ], "note": "block_time has 1 s resolution, so detect is coarse"}
+
+    # ---- 10. MadeOnSol helper (daily job only)
+    def madeonsol(self, now: int, job: dict | None, job_hb, svc: dict) -> dict:
+        lim = madeonsol_limits()
+        out = {"enabled": bool(lim["enabled"]), "limit": int(lim["daily_requests"]), "stop_at": int(lim["daily_requests"] * lim["stop_pct"] / 100),
+               "warn_pct": lim["warn_pct"], "used_today": 0, "last_ok_at": None, "last_error_at": None, "last_error": None,
+               "job_at": job_hb["ts"] if job_hb else None, "job": job, "next_run_at": (svc.get("intel", {}).get("timer") or {}).get("next_at"),
+               "creators": 0, "candidates_on_trial": 0}
+        if not self.has("intel_requests"):
+            return out
+        day0 = utc_day_start(now)
+        n, remote = self.c.execute("SELECT count(*), MAX(remote_used) FROM intel_requests WHERE provider = 'madeonsol' AND ts >= ?", (day0,)).fetchone()
+        out["used_today"] = max(n, remote or 0)
+        out["last_ok_at"] = self.one("SELECT MAX(ts) FROM intel_requests WHERE provider = 'madeonsol' AND ok = 1")
+        err = self.c.execute("SELECT ts, endpoint, error FROM intel_requests WHERE provider = 'madeonsol' AND ok = 0 ORDER BY id DESC LIMIT 1").fetchone()
+        if err:
+            out["last_error_at"], out["last_error"] = err["ts"], scrub_keys(f"{err['endpoint']}: {err['error']}")
+        out["creators"] = self.one("SELECT count(DISTINCT creator) FROM creator_reputation")
+        out["candidates_on_trial"] = self.one("SELECT count(*) FROM candidate_watch WHERE until > ?", now)
+        return out
 
     # ---- 9. learner
     def learner(self, svc: dict, scoring: dict | None, scoring_hb) -> dict:

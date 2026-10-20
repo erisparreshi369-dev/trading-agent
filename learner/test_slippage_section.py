@@ -72,3 +72,37 @@ class SlippageSection(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CreatorSection(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.c = connect(str(Path(self.tmp.name) / "t.db"))
+        migrate(self.c)
+
+    def tearDown(self):
+        self.c.close()
+        self.tmp.cleanup()
+
+    def test_with_and_without_the_creator_check(self):
+        import creator_section as cs
+        for i in range(1, 11):
+            bad = i > 4  # six coins from bad creators, each lost 30%; four good ones made 10%
+            feats = '{"creator_launches": 558}' if bad else '{}'
+            self.c.execute("INSERT INTO signals (id, ts, wallet, mint, leader_trade_id, venue, decision, reasons, features) VALUES (?, ?, 'w', 'm', 0, 'curve', 'enter', '[]', ?)",
+                           (i, NOW - DAY, feats))
+            roi = -0.3 if bad else 0.1
+            self.c.execute("""INSERT INTO shadow_trades (signal_id, variant, mint, leader_wallet, signal_at, status, size_sol, pnl_sol, roi)
+                              VALUES (?, 'live', 'm', 'w', ?, 'closed', 0.02, ?, ?)""", (i, NOW - DAY, roi * 0.02, roi))
+            self.c.execute("""INSERT INTO shadow_trades (signal_id, variant, mint, leader_wallet, signal_at, status, reasons, size_sol, pnl_sol, roi)
+                              VALUES (?, 'creator_check', 'm', 'w', ?, ?, ?, 0.02, ?, ?)""",
+                           (i, NOW - DAY, "filtered" if bad else "closed", '["bad creator: 558 launches, 0% filled their curve"]' if bad else None,
+                            None if bad else roi * 0.02, None if bad else roi))
+        self.c.execute("INSERT INTO intel_requests (ts, provider, endpoint, ok) VALUES (?, 'madeonsol', 'token/batch', 1)", (NOW - DAY,))
+        md = "\n".join(cs.section(self.c, NOW - 7 * DAY, NOW, wr.table, wr.sol, wr.pct))
+        self.assertIn("**6 of 10**", md)
+        self.assertIn("| without the creator check | 10 | 40% | -0.0280 |", md)
+        self.assertIn("| with the creator check | 4 | 100% | +0.0080 |", md)
+        self.assertIn("would have skipped **6** trades. Together they made **-0.0360 SOL**", md)
+        self.assertIn("the check helps", md)
+        self.assertIn("MadeOnSol requests this week: 1", md)

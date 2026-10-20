@@ -5,12 +5,13 @@ export type AlertLevel = "info" | "warn" | "error" | "fatal";
 /**
  * What happened, so the notifier can pick the wording (notifier/messages.ts). Raised by:
  *   kill_switch, daily_loss_cap  risk manager          helius_cap       collector
+ *   madeonsol_budget             intel job (70% / 90% of the day's requests, and when they run out)
  *   startup_blocked              a service refusing to start (missing key, LIVE_TRADING)
  *   error                        any other error log (grouped hourly)
  *   restart                      markStarted(): the previous run crashed or was killed
  *   job_failed, service_failed   scripts/notify-failure.sh (systemd OnFailure)
  */
-export type AlertKind = "kill_switch" | "daily_loss_cap" | "helius_cap" | "startup_blocked" | "error" | "restart" | "job_failed" | "service_failed";
+export type AlertKind = "kill_switch" | "daily_loss_cap" | "helius_cap" | "startup_blocked" | "error" | "restart" | "job_failed" | "service_failed" | "madeonsol_budget";
 
 export interface Alert {
   kind: AlertKind;

@@ -1,0 +1,11 @@
+[Unit]
+Description=trading-agent daily MadeOnSol intel schedule (before the 00:15 wallet scoring)
+
+[Timer]
+OnCalendar=*-*-* 00:02:00 UTC
+# run on next boot if the machine was off at the scheduled time
+Persistent=true
+RandomizedDelaySec=30
+
+[Install]
+WantedBy=timers.target

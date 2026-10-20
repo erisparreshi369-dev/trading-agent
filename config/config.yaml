@@ -83,6 +83,12 @@ signals:
   confirmation_window_s: 120
   reentry_cooldown_s: 3600
   min_score: 0.0               # signal score = wallet's shrunk simulated follower ROI (+ confirmations bonus)
+  # Creator check, from creator records the daily MadeOnSol job stored BEFORE the decision (the
+  # engine only reads our database). Off for practice trades: the shadow variant creator_check
+  # measures it first, and the weekly report compares the two.
+  exclude_bad_creators: false
+  bad_creator_min_launches: 10  # a creator with at least this many launches...
+  bad_creator_max_success: 0.01 # ...of which at most this share filled their curve, is "bad"
 
 paper:
   start_balance_sol: 1.0
@@ -127,7 +133,8 @@ shadow:
     size_0.05: { size_sol: 0.05 }                        # cost share vs size
     size_0.1: { size_sol: 0.1 }
     size_0.25: { size_sol: 0.25 }
-    no_slip_limit: { max_slippage_bps: 100000 }          # what the trades skipped for slippage would have done (weekly report)
+    no_slip_limit: { max_slippage_bps: 100000 }
+    creator_check: { filters: { exclude_bad_creators: true } }   # live settings + skip coins from bad creators (weekly report)          # what the trades skipped for slippage would have done (weekly report)
 
 notifier:
   watch_services: [collector, trader]  # alert if one of these stops reporting
@@ -157,3 +164,21 @@ providers:
     silent_s: 60               # a live stream with no message for this long = unhealthy
     budget_pct: 90             # a provider past this share of its daily budget = unhealthy
     switch_back_after_healthy_s: 120   # go back to a better provider only after it's been healthy this long
+
+madeonsol:
+  # Optional helper (madeonsol.com, key MADEONSOL_API_KEY in .env; without it nothing happens).
+  # Only the daily intel job (systemd timer trading-intel, 00:02 UTC) calls it: creator records,
+  # early-buyer scores, ranked wallets. It is NEVER called while deciding a trade.
+  enabled: true
+  key_env: MADEONSOL_API_KEY
+  base_url: https://madeonsol.com/api/v1
+  daily_requests: 200           # free plan (a batch of up to 50 coins = 1 request)
+  warn_pct: 70                  # Telegram message at this share of the day's requests
+  stop_pct: 90                  # the job stops here (another message), keeping the rest for you
+  timeout_s: 10                 # per request
+  per_minute: 30                # free plan allows 60
+  creator_batches: 60           # extra batches of 50 coins from creators who launch often
+  candidates:
+    watch_top: 20               # ranked wallets whose trades we watch, so OUR scoring can judge them
+    watch_days: 7               # each candidate gets one 7-day trial
+    min_hold_minutes: 1         # traders faster than this can't be copied with our delay
