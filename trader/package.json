@@ -1,0 +1,36 @@
+{
+  "name": "trader",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p .",
+    "typecheck": "tsc -p . --noEmit",
+    "test": "vitest run",
+    "collector": "node dist/collector/index.js",
+    "dev:collector": "tsx src/collector/index.ts",
+    "migrate": "tsx src/lib/migrate-cli.ts"
+  },
+  "dependencies": {
+    "@solana/web3.js": "^1.99.0",
+    "better-sqlite3": "^12.11.1",
+    "bs58": "^6.0.0",
+    "dotenv": "^16.6.1",
+    "pino": "^9.14.0",
+    "ws": "^8.22.0",
+    "yaml": "^2.9.1",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^22.20.5",
+    "@types/ws": "^8.18.2",
+    "pino-pretty": "^13.2.0",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.7"
+  }
+}

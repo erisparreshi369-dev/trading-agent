@@ -1,0 +1,22 @@
+# secrets
+.env
+.env.*
+!.env.example
+*.key
+keypair*.json
+
+# runtime data
+data/
+logs/
+models/
+reports/
+
+# node
+node_modules/
+trader/dist/
+
+# python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/

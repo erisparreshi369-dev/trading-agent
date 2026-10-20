@@ -1,0 +1,32 @@
+# Runtime configuration. Secrets do NOT go here; they live in .env.
+# Risk limits are deliberately NOT in this file: they are hardcoded in trader/src/risk (Phase 2).
+
+collector:
+  # pump.fun trade firehose via Helius logsSubscribe. Requires HELIUS_API_KEY.
+  helius_firehose: true
+  # Helius meters websocket traffic (~20 credits/MB). If today's firehose bytes pass this
+  # cap the firehose pauses until 00:00 UTC; the free PumpPortal streams keep running.
+  # 1500 MB/day ~= 30k credits/day ~= the Free plan's 1M credits/month.
+  helius_daily_mb_cap: 1500
+  # Free PumpPortal streams: new tokens + migrations (redundant source, no key needed).
+  pumpportal_streams: true
+
+  bars:
+    fine_bucket_ms: 5000        # bar width during the first fine_window
+    fine_window_ms: 3600000     # first hour
+    coarse_bucket_ms: 60000     # bar width afterwards
+    coarse_window_ms: 86400000  # stop bars after 24h
+
+  holder_checks:
+    # On-chain largest-holder checks (RPC). Only for tokens showing activity, to save credits.
+    enabled: true
+    min_trades: 25              # token needs this many trades before it gets checked
+    ages_s: [60, 300, 900, 1800, 3600]
+    max_per_minute: 30
+
+  retention:
+    raw_trades_days: 30         # trades by tracked wallets are always kept
+    holders_days: 3             # token_holders rows for tokens older than this are dropped
+
+  heartbeat_s: 30
+  stale_stream_s: 60            # reconnect if a stream is silent this long
