@@ -1,14 +1,32 @@
 # Runtime configuration. Secrets do NOT go here; they live in .env.
-# Risk limits are deliberately NOT in this file: they are hardcoded in trader/src/risk (Phase 2).
+# Risk limits are deliberately NOT in this file: they are hardcoded in trader/src/risk/limits.ts.
+# The loader rejects unknown sections, so a `risk:` block here is an error, not a silent no-op.
 
 collector:
-  # pump.fun trade firehose via Helius logsSubscribe. Requires HELIUS_API_KEY.
-  helius_firehose: true
-  # Helius meters websocket traffic (~20 credits/MB). If today's firehose bytes pass this
-  # cap the firehose pauses until 00:00 UTC; the free PumpPortal streams keep running.
-  # 1500 MB/day ~= 30k credits/day ~= the Free plan's 1M credits/month.
-  helius_daily_mb_cap: 1500
-  # Free PumpPortal streams: new tokens + migrations (redundant source, no key needed).
+  helius:
+    # Every Helius websocket byte is metered (~20 credits/MB). This caps ALL Helius streams per
+    # UTC day. 1500 MB ~= 30k credits/day ~= the Free plan's 1M credits/month.
+    # Developer plan (10M/month): ~15000. Measured full firehose: ~35 GB/day.
+    daily_mb_cap: 1500
+    # Kept back for targeted streams (tracked wallets, held tokens); the firehose stops before
+    # eating into it, so following keeps working all day.
+    targeted_reserve_mb: 300
+
+  firehose:
+    # Full pump.fun stream, used to DISCOVER wallets. Runs inside these UTC hours until its share
+    # of the budget is spent. [0, 24] = all day (needs a paid plan).
+    enabled: true
+    hours_utc: [14, 24]
+
+  targeted:
+    # Per-address Helius subscriptions, cheap and on all day: tracked wallets, tokens they buy,
+    # tokens we hold, PumpSwap pools of migrated tokens we care about.
+    enabled: true
+    token_watch_minutes: 60     # keep watching a token's curve this long after a tracked wallet trades it
+    pool_watch_hours: 48        # after migration
+    max_subscriptions: 900      # Helius Free allows 1000 per connection
+
+  # Free PumpPortal streams: every new token (with creator + dev buy) and every migration.
   pumpportal_streams: true
 
   bars:
@@ -18,15 +36,54 @@ collector:
     coarse_window_ms: 86400000  # stop bars after 24h
 
   holder_checks:
-    # On-chain largest-holder checks (RPC). Only for tokens showing activity, to save credits.
+    # On-chain largest-holder checks (RPC) during firehose hours, for active tokens only.
     enabled: true
-    min_trades: 25              # token needs this many trades before it gets checked
+    min_trades: 25
     ages_s: [60, 300, 900, 1800, 3600]
     max_per_minute: 30
 
   retention:
     raw_trades_days: 30         # trades by tracked wallets are always kept
-    holders_days: 3             # token_holders rows for tokens older than this are dropped
+    holders_days: 3
 
   heartbeat_s: 30
-  stale_stream_s: 60            # reconnect if a stream is silent this long
+  stale_stream_s: 60
+
+scoring:
+  lookback_days: 7
+  min_positions: 8              # closed, fully observed positions needed to be scored
+  max_tokens_per_day: 300       # more than this looks like a bot / volume farmer
+  snipe_window_slots: 2         # entries this close to launch can't be copied
+  max_snipe_pnl_frac: 0.5       # reject if more than this share of profit came from snipes
+  min_median_hold_s: 20         # faster round-trips can't be copied with our delay
+  copy_size_sol: 0.02           # follower size used in the copy simulation
+  min_copy_roi: 0.0             # mean simulated follower ROI must beat this (after all costs)
+  copy_roi_cap: 1.0             # cap each trade's ROI at +100% before averaging: one 10x shouldn't carry a losing wallet
+  track_top_n: 25
+  cold_after_hours: 48          # tracked wallet with no trades for this long is dropped
+
+signals:
+  venues: [curve]               # add amm to follow buys after migration
+  min_leader_buy_sol: 0.1
+  token_age_s: [3, 1800]
+  min_real_sol: 1.0             # SOL actually in the curve
+  max_real_sol: 75              # near completion = migration whipsaw
+  max_top10_pct: 40             # % of supply held by the top 10 wallets, curve excluded
+  max_dev_hold_pct: 10
+  max_dev_sold_frac: 0.5        # dev has sold more than this share of their launch buy
+  max_dev_tokens_24h: 5         # serial launchers
+  exclude_mayhem: true
+  min_confirmations: 1          # tracked wallets buying this token within the window (incl. leader)
+  confirmation_window_s: 120
+  reentry_cooldown_s: 3600
+  min_score: 0.0               # signal score = wallet's shrunk simulated follower ROI (+ confirmations bonus)
+
+paper:
+  start_balance_sol: 1.0
+  execution_delay_ms: 1500      # from the leader's trade landing to our order landing
+  priority_fee_sol: 0.0003      # per transaction
+  executor_fee_bps: 50          # PumpPortal Local API fee, charged both ways
+  extra_slippage_bps: 50        # same-slot competition the replay can't see
+  max_slippage_bps: 1500        # worse than this vs the leader's price = order fails, like a live slippage limit
+  token_account_rent_sol: 0.00203928  # paid on first buy, refunded when the account is closed on exit
+  follow_leader_exit: true      # sell when the leader sells

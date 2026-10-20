@@ -10,6 +10,7 @@ const disc = (name: string) => createHash("sha256").update(`event:${name}`).dige
 const TRADE = disc("TradeEvent");
 const CREATE = disc("CreateEvent");
 const COMPLETE = disc("CompleteEvent");
+const MIGRATION = disc("CompletePumpAmmMigrationEvent");
 
 export interface TradeEvent {
   kind: "trade";
@@ -53,11 +54,24 @@ export interface CompleteEvent {
   timestamp: number;
 }
 
-export type PumpEvent = TradeEvent | CreateEvent | CompleteEvent;
+/** Emitted by the pump program when a finished curve moves into a PumpSwap pool. */
+export interface MigrationEvent {
+  kind: "migration";
+  user: string;
+  mint: string;
+  mintAmount: bigint;
+  solAmount: bigint;
+  bondingCurve: string;
+  timestamp: number;
+  pool: string;
+  quoteMint: string | null;
+}
+
+export type PumpEvent = TradeEvent | CreateEvent | CompleteEvent | MigrationEvent;
 
 /** Borsh reader that returns null instead of throwing once the buffer runs out, so older
  * (shorter) event versions still decode their leading fields. */
-class Reader {
+export class Reader {
   private o = 0;
   constructor(private b: Buffer) {}
   private has(n: number) {
@@ -115,7 +129,7 @@ class Reader {
   }
 }
 
-function req<T>(v: T | null, field: string): T {
+export function req<T>(v: T | null, field: string): T {
   if (v === null) throw new Error(`truncated event at ${field}`);
   return v;
 }
@@ -194,25 +208,41 @@ export function decodeEvent(data: Buffer): PumpEvent | null {
       timestamp: Number(req(r.i64(), "timestamp")),
     };
   }
+  if (d.equals(MIGRATION)) {
+    const user = req(r.pubkey(), "user");
+    const mint = req(r.pubkey(), "mint");
+    const mintAmount = req(r.u64(), "mint_amount");
+    const solAmount = req(r.u64(), "sol_amount");
+    r.u64(); // pool_migration_fee
+    return {
+      kind: "migration", user, mint, mintAmount, solAmount,
+      bondingCurve: req(r.pubkey(), "bonding_curve"),
+      timestamp: Number(req(r.i64(), "timestamp")),
+      pool: req(r.pubkey(), "pool"),
+      quoteMint: r.pubkey(),
+    };
+  }
   return null;
 }
 
 /**
- * Extract pump.fun events from a transaction's log lines. Tracks the invoke stack so that
+ * Extract a program's Anchor events from a transaction's log lines. Tracks the invoke stack so
  * "Program data:" lines emitted by other programs in the same tx are ignored.
  */
-export function eventsFromLogs(logs: string[]): PumpEvent[] {
+export function eventsFromLogs(logs: string[]): PumpEvent[];
+export function eventsFromLogs<E>(logs: string[], program: string, decode: (b: Buffer) => E | null): E[];
+export function eventsFromLogs(logs: string[], program = PUMP_PROGRAM, decode: (b: Buffer) => unknown = decodeEvent): unknown[] {
   const stack: string[] = [];
-  const out: PumpEvent[] = [];
+  const out: unknown[] = [];
   for (const line of logs) {
     let m: RegExpMatchArray | null;
     if ((m = line.match(/^Program (\w+) invoke \[\d+\]$/))) {
       stack.push(m[1]!);
     } else if (/^Program \w+ (success|failed)/.test(line)) {
       stack.pop();
-    } else if (line.startsWith("Program data: ") && stack.at(-1) === PUMP_PROGRAM) {
+    } else if (line.startsWith("Program data: ") && stack.at(-1) === program) {
       try {
-        const ev = decodeEvent(Buffer.from(line.slice(14), "base64"));
+        const ev = decode(Buffer.from(line.slice(14), "base64"));
         if (ev) out.push(ev);
       } catch {
         // malformed/unknown layout: skip this event, keep the rest of the tx
@@ -272,4 +302,16 @@ export function encodeCreate(e: { name: string; symbol: string; uri: string; min
   const ts = Buffer.alloc(8);
   ts.writeBigInt64LE(BigInt(e.timestamp));
   return Buffer.concat([CREATE, str(e.name), str(e.symbol), str(e.uri), pk(e.mint), pk(e.bondingCurve), pk(e.user), pk(e.creator), ts]);
+}
+
+export function encodeMigration(e: Omit<MigrationEvent, "kind">): Buffer {
+  const pk = (v: string) => Buffer.from(bs58.decode(v));
+  const u64 = (v: bigint) => {
+    const b = Buffer.alloc(8);
+    b.writeBigUInt64LE(v);
+    return b;
+  };
+  const ts = Buffer.alloc(8);
+  ts.writeBigInt64LE(BigInt(e.timestamp));
+  return Buffer.concat([MIGRATION, pk(e.user), pk(e.mint), u64(e.mintAmount), u64(e.solAmount), u64(0n), pk(e.bondingCurve), ts, pk(e.pool), pk(e.quoteMint ?? WSOL_MINT)]);
 }

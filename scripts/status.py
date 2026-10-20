@@ -1,4 +1,4 @@
-"""`make status`: is everything running, how fresh is the data. PnL is added in Phase 2."""
+"""`make status`: is everything running, how fresh is the data, how is paper trading doing."""
 from __future__ import annotations
 
 import json
@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parent.parent
 DB = Path(os.environ.get("DB_PATH", ROOT / "data/trading.db"))
 if not DB.is_absolute():
     DB = ROOT / DB
-SERVICES = ["collector"]  # trader + learner join in later phases
+SERVICES = ["collector", "trader"]  # learner joins in Phase 4
 STALE_S = 300
 
 G, R, Y, D, B = "\033[32m", "\033[31m", "\033[33m", "\033[2m", "\033[1m"
@@ -72,11 +72,17 @@ def main() -> int:
         state = f"{G}alive{X}" if fresh else (f"{R}STALE{X}" if pid_running(pid) else f"{R}STOPPED{X}")
         print(f"  {svc:<10} {state}  heartbeat {ago(ts)}  pid={pid}  systemd={unit}")
         i = json.loads(info or "{}")
-        streams = i.get("streams", {})
-        parts = [f"{k}={'up' if v else ('off' if v is None else 'DOWN')}" for k, v in streams.items() if k != "heliusPausedForCap"]
-        if streams.get("heliusPausedForCap"):
-            parts.append(f"{Y}helius PAUSED (daily cap){X}")
-        print(f"  {D}{'':<10} {' '.join(parts)}  helius today={i.get('heliusMbToday', 0)}MB  rss={i.get('rss_mb')}MB{X}")
+        if svc == "collector":
+            st = i.get("streams", {})
+            def show(name):
+                v = st.get(name)
+                return f"{name}={'up' if v else ('off' if v is None else R + 'DOWN' + X + D)}"
+            fh = show("firehose") + (f" ({st['firehoseOff']})" if st.get("firehoseOff") else "")
+            print(f"  {D}{'':<10} {fh}  {show('targeted')} [{st.get('targetedSubs', 0)} subs, {i.get('trackedWallets', 0)} wallets]  {show('pumpportal')}{X}")
+            print(f"  {D}{'':<10} helius today {i.get('heliusMbToday', 0)} / {i.get('heliusCapMb', '?')} MB  rss={i.get('rss_mb')}MB{X}")
+        elif svc == "trader":
+            flags = (f" {R}KILL SWITCH ON{X}" if i.get("killed") else "") + (f" {Y}halted today (daily loss cap){X}" if i.get("haltedToday") else "")
+            print(f"  {D}{'':<10} mode={i.get('mode')} tracked={i.get('tracked')} signals={i.get('signals', 0)} entered={i.get('entered', 0)} errors={i.get('errors', 0)}{X}{flags}")
 
     print(f"\n{B}data{X}")
     day = time.strftime("%Y-%m-%d", time.gmtime())
@@ -101,8 +107,39 @@ def main() -> int:
     size = sum(p.stat().st_size for p in DB.parent.glob(DB.name + "*"))
     print(f"  db size    {size / 1e9:.2f} GB")
 
-    print(f"\n{B}pnl{X}\n  {D}(paper trading arrives in Phase 2){X}")
+    print(f"\n{B}paper trading{X}")
+    acct = q("SELECT balance_sol, start_balance FROM paper_account WHERE id = 1") if has_table(c, "paper_account") else None
+    if not acct:
+        print(f"  {D}not started{X}")
+    else:
+        bal, start = acct
+        live = c.execute("SELECT mint, status, cost_sol, size_sol, tokens, last_price, entry_price, opened_at FROM paper_positions WHERE status IN ('pending','open')").fetchall()
+        tr = q("SELECT info FROM service_heartbeats WHERE service = 'trader'")
+        equity = json.loads(tr[0]).get("equity", bal) if tr else bal
+        pnl = equity - start
+        col = G if pnl >= 0 else R
+        print(f"  equity     {equity:.4f} SOL  ({col}{pnl:+.4f} SOL, {pnl / start * 100:+.1f}%{X} since start {start:g})  free {bal:.4f}")
+        day0 = int(time.mktime(time.strptime(day, "%Y-%m-%d")) - time.timezone) * 1000
+        for label, since in (("today", day0), ("7 days", now - 7 * 86_400_000), ("all time", 0)):
+            n, wins, s, fails = q("""SELECT count(*), SUM(pnl_sol > 0), COALESCE(SUM(pnl_sol), 0), SUM(status = 'failed')
+                FROM paper_positions WHERE status IN ('closed','failed') AND closed_at >= ?""", since)
+            closed = n - (fails or 0)
+            wr = f"{(wins or 0) / closed * 100:.0f}% win" if closed else "-"
+            print(f"  {label:<10} {closed:>4} closed  {wr:>8}  {s:+.4f} SOL  {fails or 0} failed fills")
+        for m, st, cost, size, tok, last, entry, opened in live:
+            chg = f"{(last / entry - 1) * 100:+.1f}%" if st == "open" and entry else "pending fill"
+            print(f"  {D}  {st:<7} {m[:8]}  {(cost or size):.4f} SOL  {chg}  {ago(opened) if opened else ''}{X}")
+        sig = q("SELECT count(*), SUM(decision = 'enter'), SUM(decision = 'risk_block') FROM signals WHERE ts > ?", now - 86_400_000)
+        if sig and sig[0]:
+            print(f"  {D}signals 24h: {sig[0]} evaluated, {sig[1] or 0} entered, {sig[2] or 0} blocked by risk{X}")
+        top = c.execute("""SELECT reasons, count(*) n FROM signals WHERE decision = 'reject' AND ts > ? GROUP BY reasons ORDER BY n DESC LIMIT 3""", (now - 86_400_000,)).fetchall()
+        for r, n in top:
+            print(f"  {D}  {n:>4}x {', '.join(json.loads(r))[:90]}{X}")
     return 0 if ok else 2
+
+
+def has_table(c, name: str) -> bool:
+    return c.execute("SELECT 1 FROM sqlite_master WHERE name = ?", (name,)).fetchone() is not None
 
 
 if __name__ == "__main__":

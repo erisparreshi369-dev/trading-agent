@@ -22,6 +22,7 @@ export interface TradeRow {
   is_dev: number;
   ix_name: string | null;
   source: string;
+  venue: "curve" | "amm";
 }
 
 export interface TokenRow {
@@ -62,10 +63,10 @@ export class Store {
     this.stmts = {
       trade: db.prepare(`INSERT OR IGNORE INTO trades (signature, ev_index, slot, block_time, received_at, mint, wallet,
         is_buy, sol_lamports, token_amount, v_sol_reserves, v_token_reserves, real_sol_reserves, real_token_reserves,
-        fee_lamports, creator_fee_lamports, price_sol, is_dev, ix_name, source)
+        fee_lamports, creator_fee_lamports, price_sol, is_dev, ix_name, source, venue)
         VALUES (@signature, @ev_index, @slot, @block_time, @received_at, @mint, @wallet, @is_buy, @sol_lamports,
         @token_amount, @v_sol_reserves, @v_token_reserves, @real_sol_reserves, @real_token_reserves, @fee_lamports,
-        @creator_fee_lamports, @price_sol, @is_dev, @ix_name, @source)`),
+        @creator_fee_lamports, @price_sol, @is_dev, @ix_name, @source, @venue)`),
       holder: db.prepare(`INSERT INTO token_holders (mint, wallet, balance, updated_at) VALUES (?, ?, MAX(0, ?), ?)
         ON CONFLICT(mint, wallet) DO UPDATE SET balance = MAX(0, balance + ?), updated_at = excluded.updated_at`),
       // Two sources report the same token; keep the first non-null value for each field.
@@ -80,6 +81,9 @@ export class Store {
         @v_sol_reserves, @holders, @top10_pct, @dev_pct)`),
       completed: db.prepare("UPDATE tokens SET completed_at = COALESCE(completed_at, ?) WHERE mint = ?"),
       migrated: db.prepare("UPDATE tokens SET migrated_at = COALESCE(migrated_at, ?), migration_pool = COALESCE(migration_pool, ?) WHERE mint = ?"),
+      pool: db.prepare("INSERT OR IGNORE INTO pools (pool, mint, quote_mint, created_at, source) VALUES (?, ?, ?, ?, ?)"),
+      watch: db.prepare(`INSERT INTO watchlist (address, kind, mint, until, priority, reason) VALUES (?, ?, ?, ?, ?, ?)
+        ON CONFLICT(address) DO UPDATE SET until = MAX(until, excluded.until), priority = MIN(priority, excluded.priority)`),
     };
   }
 
@@ -101,6 +105,15 @@ export class Store {
 
   markMigrated(mint: string, ts: number, pool: string | null): void {
     this.stmts.migrated.run(ts, pool, mint);
+  }
+
+  addPool(pool: string, mint: string, quoteMint: string | null, ts: number, source: string): void {
+    this.stmts.pool.run(pool, mint, quoteMint, ts, source);
+  }
+
+  /** Ask for an address to be followed by targeted subscriptions until `until`. */
+  watch(address: string, kind: "curve" | "pool" | "wallet", mint: string | null, until: number, priority: number, reason: string): void {
+    this.stmts.watch.run(address, kind, mint, until, priority, reason);
   }
 
   get pending(): number {

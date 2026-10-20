@@ -11,7 +11,7 @@ function row(over: Partial<TradeRow> = {}): TradeRow {
   return {
     signature: "sig1", ev_index: 0, slot: 1, block_time: 1000, received_at: 1000, mint: "M", wallet: "W", is_buy: 1,
     sol_lamports: 1_000_000_000n, token_amount: 5_000_000n, v_sol_reserves: 31n, v_token_reserves: 1000n, real_sol_reserves: 1n,
-    real_token_reserves: 1n, fee_lamports: 1n, creator_fee_lamports: 0n, price_sol: 1e-8, is_dev: 0, ix_name: "buy", source: "test",
+    real_token_reserves: 1n, fee_lamports: 1n, creator_fee_lamports: 0n, price_sol: 1e-8, is_dev: 0, ix_name: "buy", source: "test", venue: "curve",
     ...over,
   };
 }
@@ -20,7 +20,7 @@ describe("migrations", () => {
   it("are idempotent", () => {
     const db = openDb(":memory:");
     expect(migrate(db)).toEqual([]);
-    expect(db.prepare("SELECT count(*) n FROM schema_migrations").get()).toEqual({ n: 1 });
+    expect(db.prepare("SELECT name FROM schema_migrations ORDER BY name").all()).toEqual([{ name: "001_init.sql" }, { name: "002_trading.sql" }]);
   });
 
   it("python and TS runners agree on the same database", () => {
@@ -28,10 +28,10 @@ describe("migrations", () => {
     const path = join(dir, "t.db");
     const py = resolve(ROOT, ".venv/bin/python");
     const out = execFileSync(py, [resolve(ROOT, "shared/migrate.py"), path], { encoding: "utf8" });
-    expect(out).toMatch(/applied: \['001_init.sql'\]/);
+    expect(out).toMatch(/applied: \['001_init.sql', '002_trading.sql'\]/);
     const db = openDb(path); // TS runner sees nothing left to do
     expect(migrate(db)).toEqual([]);
-    expect(db.prepare("SELECT count(*) n FROM sqlite_master WHERE name = 'trades'").get()).toEqual({ n: 1 });
+    expect(db.prepare("SELECT count(*) n FROM sqlite_master WHERE name IN ('trades', 'paper_positions', 'watchlist')").get()).toEqual({ n: 3 });
     db.close();
   });
 });

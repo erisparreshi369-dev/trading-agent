@@ -1,0 +1,96 @@
+import { existsSync } from "node:fs";
+import type { DB } from "../lib/db.js";
+import { log } from "../lib/log.js";
+import { RISK } from "./limits.js";
+
+export type EntryDecision = { ok: true; sizeSol: number } | { ok: false; reason: string };
+
+export interface AccountSnapshot {
+  equity: number; // free balance + marked value of everything held
+  freeBalance: number;
+  startBalance: number;
+  openPositions: number; // pending + open
+  entriesToday: number;
+}
+
+export interface PositionView {
+  entryPrice: number;
+  openedAt: number;
+}
+
+const utcDay = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+
+/**
+ * Enforces RISK. It takes only account facts as input: no signal score, no model output, no
+ * config. Exits are never blocked; the kill switch and loss caps only stop new entries
+ * (and the kill switch also makes the engine flatten everything).
+ */
+export class RiskManager {
+  constructor(
+    private db: DB,
+    private killFile: string,
+    private now: () => number = Date.now,
+  ) {}
+
+  isKilled(): { killed: boolean; reason: string | null } {
+    const row = this.db.prepare("SELECT kill_switch, kill_reason FROM risk_state WHERE id = 1").get() as { kill_switch: number; kill_reason: string | null };
+    if (row.kill_switch) return { killed: true, reason: row.kill_reason };
+    if (existsSync(this.killFile)) return { killed: true, reason: `kill file ${this.killFile}` };
+    return { killed: false, reason: null };
+  }
+
+  /** Trip the kill switch. There is deliberately no way to clear it from here (see scripts/unkill). */
+  kill(reason: string): void {
+    const r = this.db.prepare("UPDATE risk_state SET kill_switch = 1, kill_reason = ?, kill_at = ? WHERE id = 1 AND kill_switch = 0").run(reason, this.now());
+    if (r.changes) log.error({ reason }, "KILL SWITCH TRIPPED");
+  }
+
+  /** Called every tick with current equity: rolls the UTC day and trips the loss limits. */
+  tick(a: Pick<AccountSnapshot, "equity" | "startBalance">): void {
+    const today = utcDay(this.now());
+    const st = this.state();
+    if (st.day !== today) {
+      this.db.prepare("UPDATE risk_state SET day = ?, day_start_equity = ? WHERE id = 1").run(today, a.equity);
+      st.day_start_equity = a.equity;
+    }
+    if (a.equity < a.startBalance * (1 - RISK.MAX_DRAWDOWN_PCT)) {
+      this.kill(`max drawdown: equity ${a.equity.toFixed(4)} < ${(1 - RISK.MAX_DRAWDOWN_PCT) * 100}% of start ${a.startBalance}`);
+    }
+    if (st.halted_day !== today && st.day_start_equity !== null && a.equity < st.day_start_equity * (1 - RISK.DAILY_LOSS_CAP_PCT)) {
+      this.db.prepare("UPDATE risk_state SET halted_day = ? WHERE id = 1").run(today);
+      log.warn({ equity: a.equity, dayStart: st.day_start_equity }, "daily loss cap hit: no new entries until 00:00 UTC");
+    }
+  }
+
+  haltedToday(): boolean {
+    return this.state().halted_day === utcDay(this.now());
+  }
+
+  checkEntry(a: AccountSnapshot): EntryDecision {
+    this.tick(a);
+    const kill = this.isKilled();
+    if (kill.killed) return { ok: false, reason: `kill switch: ${kill.reason}` };
+    if (this.haltedToday()) return { ok: false, reason: "daily loss cap reached" };
+    if (a.openPositions >= RISK.MAX_OPEN_POSITIONS) return { ok: false, reason: `max open positions (${RISK.MAX_OPEN_POSITIONS})` };
+    if (a.entriesToday >= RISK.MAX_ENTRIES_PER_DAY) return { ok: false, reason: `max entries per day (${RISK.MAX_ENTRIES_PER_DAY})` };
+    const size = Math.min(a.equity * RISK.MAX_POSITION_PCT, RISK.MAX_POSITION_SOL);
+    if (size < RISK.MIN_POSITION_SOL) return { ok: false, reason: `position size ${size.toFixed(4)} below minimum ${RISK.MIN_POSITION_SOL}` };
+    if (a.freeBalance - size < RISK.MIN_FREE_BALANCE_SOL) return { ok: false, reason: "free balance would drop below reserve" };
+    return { ok: true, sizeSol: size };
+  }
+
+  /** Hard exits. Returns a reason to exit, or null. */
+  checkExit(p: PositionView, price: number): string | null {
+    if (price <= p.entryPrice * (1 - RISK.STOP_LOSS_PCT)) return "stop_loss";
+    if (this.now() - p.openedAt >= RISK.TIME_EXIT_MS) return "time_exit";
+    return null;
+  }
+
+  private state() {
+    return this.db.prepare("SELECT day, day_start_equity, halted_day FROM risk_state WHERE id = 1").get() as {
+      day: string | null;
+      day_start_equity: number | null;
+      halted_day: string | null;
+    };
+  }
+}

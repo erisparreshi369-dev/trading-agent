@@ -12,7 +12,11 @@
     "test": "vitest run",
     "collector": "node dist/collector/index.js",
     "dev:collector": "tsx src/collector/index.ts",
-    "migrate": "tsx src/lib/migrate-cli.ts"
+    "verify:live": "tsx src/tools/verify-live.ts",
+    "trader": "node dist/trader/index.js",
+    "score": "node dist/scoring/index.js",
+    "kill": "tsx src/tools/kill.ts kill",
+    "unkill": "tsx src/tools/kill.ts unkill"
   },
   "dependencies": {
     "@solana/web3.js": "^1.99.0",
