@@ -4,6 +4,7 @@ import { openDb } from "../lib/db.js";
 import { log } from "../lib/log.js";
 import { attachAlerts, markStarted, runService } from "../lib/service.js";
 import { Notifier, SERVICE } from "./notifier.js";
+import { solUsd } from "./price.js";
 import { Telegram } from "./telegram.js";
 
 const token = env.telegramToken(), chatId = env.telegramChatId();
@@ -14,12 +15,12 @@ if (!token || !chatId) {
 const cfg = loadConfig();
 const db = openDb(env.dbPath);
 attachAlerts(db, SERVICE);
-markStarted(db, SERVICE);
+const previous = markStarted(db, SERVICE);
 const notifier = new Notifier({
-  db, cfg: cfg.notifier, telegram: new Telegram(token, chatId), killFile: resolve(ROOT, "data/KILL"),
-  reportsDir: resolve(ROOT, "reports"),
+  db, cfg, telegram: new Telegram(token, chatId), killFile: resolve(ROOT, "data/KILL"), reportsDir: resolve(ROOT, "reports"),
+  usdPrice: cfg.notifier.usd_prices ? solUsd : undefined,
 });
-notifier.start();
+notifier.start(previous);
 runService(SERVICE, () => {
   notifier.stop();
   db.close();

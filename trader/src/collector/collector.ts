@@ -4,6 +4,7 @@ import { log } from "../lib/log.js";
 import { ReconnectingWs } from "../lib/reconnecting-ws.js";
 import { decodeAmmEvent, PUMPSWAP_PROGRAM, type AmmTradeEvent } from "./amm-events.js";
 import { BarAggregator } from "./bars.js";
+import { capEta, firehoseAllowed, followsWallets, keepWatch, modeFor, stepReached, UsageRate, type DataMode } from "./budget.js";
 import { HolderChecker } from "./holder-checks.js";
 import { bondingCurve, canonicalPool } from "./pools.js";
 import { DEFAULT_PUBKEY, eventsFromLogs, isSolQuoted, priceSol, PUMP_PROGRAM, WSOL_MINT, type PumpEvent } from "./pump-events.js";
@@ -43,6 +44,11 @@ export class Collector {
   private usage = new Map<string, { messages: number; bytes: number }>();
   private heliusBytesToday = 0;
   private usageDay: string;
+  private mode: DataMode = "normal";
+  private modeSaved = false; // a mode left in kv by a previous run must be overwritten at start
+  private rate: UsageRate;
+  private warned = { day: "", step: 0 };
+  private budgetGap = false;
   private trackedWallets = new Set<string>();
   private poolToMint = new Map<string, string>();
   private creatorCache = new Map<string, string | null>();
@@ -59,6 +65,7 @@ export class Collector {
     this.store = new Store(d.db);
     this.bars = new BarAggregator(d.cfg.bars);
     this.usageDay = utcDay(this.now());
+    this.rate = new UsageRate(this.now());
   }
 
   private get hasHelius(): boolean {
@@ -73,6 +80,8 @@ export class Collector {
     this.heliusBytesToday = (db.prepare(
       `SELECT COALESCE(SUM(bytes), 0) b FROM stream_usage WHERE day = ? AND source IN (${HELIUS_SOURCES.map(() => "?").join(",")})`,
     ).get(this.usageDay, ...HELIUS_SOURCES) as { b: number }).b;
+    const warned = (db.prepare("SELECT value FROM kv WHERE key = 'collector.budget_warned'").get() as { value: string } | undefined)?.value.split(":");
+    if (warned) this.warned = { day: warned[0]!, step: Number(warned[1]) || 0 };
 
     const key = this.d.heliusApiKey ?? "";
     const heliusWs = `wss://mainnet.helius-rpc.com/?api-key=${key}`;
@@ -153,16 +162,20 @@ export class Collector {
 
   // ---- budget + schedule ----
 
-  /** Decide which Helius streams should run, given the hour and today's spend. */
+  /** Decide which Helius streams should run, given the hour and today's spend (see budget.ts). */
   private schedule(): void {
-    const { cfg } = this.d;
+    const { cfg, db } = this.d;
+    if (utcDay(this.now()) !== this.usageDay) this.rollDay();
     const mb = this.heliusBytesToday / 1e6;
+    const open = (db.prepare("SELECT count(*) n FROM paper_positions WHERE status IN ('pending', 'open')").get() as { n: number }).n;
+    this.setMode(modeFor(mb, cfg.helius.daily_mb_cap, cfg.helius.steps_pct, open));
+    this.warnBudget(mb, open);
     const hour = new Date(this.now()).getUTCHours();
     const [h0, h1] = cfg.firehose.hours_utc;
     const inHours = h0 <= h1 ? hour >= h0 && hour < h1 : hour >= h0 || hour < h1;
 
     if (this.firehose) {
-      const off = !inHours ? "off-hours" : mb >= cfg.helius.daily_mb_cap - cfg.helius.targeted_reserve_mb ? "daily budget used" : null;
+      const off = !inHours ? "off-hours" : !firehoseAllowed(this.mode) ? "daily budget used" : null;
       if (!off && !this.firehoseRunning) {
         this.firehoseRunning = true;
         this.firehoseOffReason = null;
@@ -177,17 +190,56 @@ export class Collector {
       }
     }
     if (this.targetedWs) {
-      const capped = mb >= cfg.helius.daily_mb_cap;
-      if (!capped && !this.targetedRunning) {
+      // not following the tracked wallets is a gap in their data (scoring and shadow trades skip it);
+      // re-opened if a reconnect's 'up' closed it
+      if (!followsWallets(this.mode) && !this.openGaps.has("targeted")) {
+        this.openGap("targeted", "daily cap reached");
+        this.budgetGap = true;
+      } else if (followsWallets(this.mode) && this.budgetGap) {
+        this.closeGap("targeted");
+        this.budgetGap = false;
+      }
+      const run = this.mode !== "off";
+      if (run && !this.targetedRunning) {
         this.targetedRunning = true;
         this.targetedWs.start();
-      } else if (capped && this.targetedRunning) {
-        log.error({ mbToday: Math.round(mb) }, "Helius daily cap reached: targeted streams paused, following is OFF until 00:00 UTC");
-        this.openGap("targeted", "daily cap reached");
+      } else if (!run && this.targetedRunning) {
+        log.info({ mbToday: Math.round(mb) }, "Helius daily cap reached and no open trades: targeted streams stopped until 00:00 UTC");
         this.targetedRunning = false;
         this.targetedWs.stop();
       }
     }
+  }
+
+  private rollDay(): void {
+    this.persistUsage();
+    this.usageDay = utcDay(this.now());
+    this.heliusBytesToday = 0;
+  }
+
+  private setMode(mode: DataMode): void {
+    if (mode === this.mode && this.modeSaved) return;
+    if (mode !== this.mode) log.info({ from: this.mode, to: mode, mbToday: Math.round(this.heliusBytesToday / 1e6) }, "data mode changed");
+    this.mode = mode;
+    this.modeSaved = true;
+    // the trader reads this: no new entries once we stop following the wallets
+    this.d.db.prepare("INSERT INTO kv (key, value) VALUES ('collector.data_mode', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(mode);
+    this.reconcileTargets();
+  }
+
+  /** One Telegram warning per step per UTC day (70/85/95% and the cap), with the speed and when we'd run out. */
+  private warnBudget(mb: number, openPositions: number): void {
+    const { cfg, db } = this.d;
+    const step = stepReached(mb, cfg.helius.daily_mb_cap, cfg.helius.steps_pct);
+    if (step <= (this.warned.day === this.usageDay ? this.warned.step : 0)) return;
+    this.warned = { day: this.usageDay, step };
+    db.prepare("INSERT INTO kv (key, value) VALUES ('collector.budget_warned', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(`${this.usageDay}:${step}`);
+    const now = this.now();
+    const mbPerHour = this.rate.mbPerHour(now);
+    const facts = { pct: step, mbToday: Math.round(mb), capMb: cfg.helius.daily_mb_cap, mbPerHour: Math.round(mbPerHour),
+      capAt: capEta(mb, cfg.helius.daily_mb_cap, mbPerHour, now), mode: this.mode, openPositions };
+    if (step === 100) log.error({ alert: "helius_cap", ...facts }, "Helius daily cap reached: following is OFF until 00:00 UTC; open trades are still watched");
+    else log.warn({ alert: "helius_budget", ...facts }, `Helius data: ${step}% of today's budget used, ${this.mode} mode`);
   }
 
   /** Reload tracked wallets and resync targeted subscriptions now (normally on timers). */
@@ -198,8 +250,12 @@ export class Collector {
 
   private reconcileTargets(): void {
     if (!this.targeted) return;
-    const rows = this.d.db.prepare("SELECT address, priority FROM watchlist WHERE until > ?").all(this.now()) as WatchTarget[];
-    const wallets = [...this.trackedWallets].map((address) => ({ address, priority: 0 }));
+    const now = this.now();
+    const tokenWatchMs = this.d.cfg.targeted.token_watch_minutes * 60_000;
+    const rows = (this.d.db.prepare("SELECT address, priority, reason, until FROM watchlist WHERE until > ?").all(now) as (WatchTarget & { reason: string | null; until: number })[])
+      .filter((r) => keepWatch(this.mode, r, now, tokenWatchMs))
+      .map(({ address, priority }) => ({ address, priority }));
+    const wallets = followsWallets(this.mode) ? [...this.trackedWallets].map((address) => ({ address, priority: 0 })) : [];
     this.targeted.reconcile([...wallets, ...rows]);
   }
 
@@ -398,19 +454,14 @@ export class Collector {
   }
 
   private meter(source: string, bytes: number): void {
-    const day = utcDay(this.now());
-    if (day !== this.usageDay) {
-      this.persistUsage();
-      this.usageDay = day;
-      this.heliusBytesToday = 0;
-      this.schedule();
-    }
+    if (utcDay(this.now()) !== this.usageDay) this.schedule(); // rolls the day
     const u = this.usage.get(source) ?? { messages: 0, bytes: 0 };
     u.messages++;
     u.bytes += bytes;
     this.usage.set(source, u);
     if (HELIUS_SOURCES.includes(source)) {
       this.heliusBytesToday += bytes;
+      this.rate.add(this.now(), bytes);
       // check the budget promptly: at full firehose speed 5s is ~2 MB
       if (u.messages % 200 === 0) this.schedule();
     }
@@ -419,7 +470,14 @@ export class Collector {
   private persistUsage(): void {
     const st = this.d.db.prepare(`INSERT INTO stream_usage (day, source, messages, bytes) VALUES (?, ?, ?, ?)
       ON CONFLICT(day, source) DO UPDATE SET messages = messages + excluded.messages, bytes = bytes + excluded.bytes`);
-    for (const [source, u] of this.usage) st.run(this.usageDay, source, u.messages, u.bytes);
+    // hourly too, for "MB per hour" history (attributed to the hour of the write: at most a heartbeat off)
+    const hourly = this.d.db.prepare(`INSERT INTO stream_usage_hourly (hour, source, messages, bytes) VALUES (?, ?, ?, ?)
+      ON CONFLICT(hour, source) DO UPDATE SET messages = messages + excluded.messages, bytes = bytes + excluded.bytes`);
+    const hour = Math.floor(this.now() / 3_600_000) * 3_600_000;
+    for (const [source, u] of this.usage) {
+      st.run(this.usageDay, source, u.messages, u.bytes);
+      hourly.run(hour, source, u.messages, u.bytes);
+    }
     this.usage.clear();
   }
 
@@ -459,7 +517,9 @@ export class Collector {
     this.persistUsage();
     heartbeat(this.d.db, SERVICE, {
       ...this.stats, streams: this.streams, liveTokens: this.bars.size, heliusMbToday: +(this.heliusBytesToday / 1e6).toFixed(1),
-      heliusCapMb: this.d.cfg.helius.daily_mb_cap, targetedStats: this.targeted?.stats ?? null, trackedWallets: this.trackedWallets.size,
+      heliusCapMb: this.d.cfg.helius.daily_mb_cap, heliusMbLastHour: +this.rate.mbLastHour(this.now()).toFixed(1),
+      heliusMbPerHour: +this.rate.mbPerHour(this.now()).toFixed(1), heliusCapAt: capEta(this.heliusBytesToday / 1e6, this.d.cfg.helius.daily_mb_cap,
+        this.rate.mbPerHour(this.now()), this.now()), dataMode: this.mode, budgetStepsPct: this.d.cfg.helius.steps_pct, targetedStats: this.targeted?.stats ?? null, trackedWallets: this.trackedWallets.size,
       holderChecks: this.holders?.stats ?? null, rss_mb: Math.round(process.memoryUsage().rss / 1e6),
     });
   }

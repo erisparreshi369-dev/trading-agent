@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import dotenv from "dotenv";
 import YAML from "yaml";
 import { z } from "zod";
+import { RISK } from "../risk/limits.js";
 
 export const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 
@@ -12,7 +13,12 @@ dotenv.config({ path: resolve(ROOT, ".env"), quiet: true });
 // .strict() everywhere: a typo or an unexpected section (e.g. someone adding `risk:`) fails loudly.
 const CollectorSchema = z
   .object({
-    helius: z.object({ daily_mb_cap: z.number().positive(), targeted_reserve_mb: z.number().nonnegative() }).strict(),
+    helius: z
+      .object({
+        daily_mb_cap: z.number().positive(),
+        steps_pct: z.tuple([z.number(), z.number(), z.number()]).refine(([a, b, c]) => 0 < a && a < b && b < c && c < 100, "three rising percentages below 100"),
+      })
+      .strict(),
     firehose: z
       .object({
         enabled: z.boolean(),
@@ -54,6 +60,7 @@ const ScoringSchema = z
   .object({
     lookback_days: z.number().positive(),
     min_positions: z.number().int().positive(),
+    min_copy_trades: z.number().int().positive(),
     max_tokens_per_day: z.number().positive(),
     snipe_window_slots: z.number().int().nonnegative(),
     max_snipe_pnl_frac: z.number().min(0).max(1),
@@ -63,6 +70,7 @@ const ScoringSchema = z
     copy_roi_cap: z.number().positive(),
     track_top_n: z.number().int().positive(),
     cold_after_hours: z.number().positive(),
+    oos_days: z.number().positive(),
   })
   .strict();
 
@@ -98,17 +106,55 @@ const PaperSchema = z
   })
   .strict();
 
+// Exits a shadow variant may use. The hard stop loss and time exit (RISK) apply on top, always.
+const ExitSchema = z
+  .object({
+    leader_exit: z.boolean(),
+    take_profit_pct: z.number().positive().nullable(),
+    trailing_stop_pct: z.number().positive().max(100).nullable(),
+    max_hold_s: z.number().positive().max(RISK.TIME_EXIT_MS / 1000),
+  })
+  .strict()
+  .partial();
+
+const ShadowSchema = z
+  .object({
+    enabled: z.boolean(),
+    size_sol: z.number().positive(),
+    variants: z.record(
+      z.string().regex(/^[\w.-]+$/),
+      z
+        .object({
+          filters: z.union([z.literal("none"), SignalsSchema.partial()]).optional(),
+          exit: ExitSchema.optional(),
+          size_sol: z.number().positive().optional(),
+          max_slippage_bps: z.number().positive().optional(),
+        })
+        .strict(),
+    ),
+  })
+  .strict();
+
 const NotifierSchema = z
   .object({
     watch_services: z.array(z.string()).min(1),
     stale_after_s: z.number().positive(),
     daily_summary_utc: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
     trade_alerts: z.boolean(),
+    timezone: z.string().refine((tz) => {
+      try {
+        new Intl.DateTimeFormat("en", { timeZone: tz });
+        return true;
+      } catch {
+        return false;
+      }
+    }, "unknown time zone (use a name like UTC or Europe/London)"),
+    usd_prices: z.boolean(),
   })
   .strict();
 
 export const ConfigSchema = z
-  .object({ collector: CollectorSchema, scoring: ScoringSchema, signals: SignalsSchema, paper: PaperSchema, notifier: NotifierSchema })
+  .object({ collector: CollectorSchema, scoring: ScoringSchema, signals: SignalsSchema, paper: PaperSchema, shadow: ShadowSchema, notifier: NotifierSchema })
   .strict();
 
 export type Config = z.infer<typeof ConfigSchema>;
@@ -116,6 +162,8 @@ export type CollectorConfig = z.infer<typeof CollectorSchema>;
 export type ScoringConfig = z.infer<typeof ScoringSchema>;
 export type SignalsConfig = z.infer<typeof SignalsSchema>;
 export type PaperConfig = z.infer<typeof PaperSchema>;
+export type ShadowConfig = z.infer<typeof ShadowSchema>;
+export type ShadowExitConfig = z.infer<typeof ExitSchema>;
 export type NotifierConfig = z.infer<typeof NotifierSchema>;
 
 export function loadConfig(path = resolve(ROOT, "config/config.yaml")): Config {

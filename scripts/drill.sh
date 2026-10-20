@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Recovery drill: for each service, a clean restart and a hard crash (kill -9), checking that
-# systemd brings it back, its heartbeat resumes, and the crash alert reaches Telegram.
+# systemd brings it back, its heartbeat resumes, and the notifier reports it as a 🔧 restart
+# (never a 🚨: it was back within 20s).
 #   scripts/drill.sh [collector trader notifier]
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -17,8 +18,12 @@ wait_for() { # seconds, description, command...
 }
 # a heartbeat written by the CURRENT process (a stopping process also writes a final one)
 hb_after() { [ "$(q "SELECT ts > $2 AND pid = $(prop "$1" MainPID) FROM service_heartbeats WHERE service = '$1'")" = 1 ]; }
-alert_sent() { [ "$(q "SELECT count(*) FROM alerts WHERE ts > $2 AND text LIKE '$1 restarted after dying%time today' AND sent_at IS NOT NULL")" -ge 1 ]; }
-no_alert() { [ "$(q "SELECT count(*) FROM alerts WHERE ts > $2 AND source = '$1' AND level IN ('error', 'fatal')")" -eq 0 ]; }
+# the restart is recorded, and the notifier has either sent its 🔧 message or (one per part per
+# hour) is holding it to group with the next ones
+restart_seen() { [ "$(q "SELECT count(*) FROM alerts WHERE ts > $2 AND kind = 'restart' AND source = '$1'")" -ge 1 ]; }
+restart_handled() { [ "$(q "SELECT count(*) FROM alerts WHERE ts > $2 AND kind = 'restart' AND source = '$1' AND sent_at IS NOT NULL")" -ge 1 ] \
+  || [ "$(q "SELECT COALESCE(MAX(value), 0) FROM kv WHERE key = 'notifier.restart_msg.$1'")" -gt $(( $(ms) - 3600000 )) ]; }
+no_alert() { [ "$(q "SELECT count(*) FROM alerts WHERE ts > $2 AND source = '$1' AND (kind = 'restart' OR level IN ('error', 'fatal'))")" -eq 0 ]; }
 FAILS=0
 
 for s in "${SERVICES[@]}"; do
@@ -42,7 +47,8 @@ for s in "${SERVICES[@]}"; do
   wait_for 30 "restarted by systemd" bash -c "[ \"\$(systemctl --user show trading-$s -p MainPID --value)\" != $pid0 ] && [ \"\$(systemctl --user show trading-$s -p MainPID --value)\" != 0 ]" || ok=0
   [ "$(prop "$s" NRestarts)" -gt "$r0" ] || { echo "    FAIL: NRestarts did not increase"; ok=0; }
   wait_for 45 "fresh heartbeat after crash" hb_after "$s" "$t0" || ok=0
-  wait_for 120 "crash alert delivered to Telegram" alert_sent "$s" "$t0" || ok=0
+  wait_for 30 "restart recorded" restart_seen "$s" "$t0" || ok=0
+  wait_for 90 "🔧 message sent (or grouped into this hour's)" restart_handled "$s" "$t0" || ok=0
   echo "  crash:   $([ $ok = 1 ] && echo OK || echo FAILED) (kill -9 $pid0 -> pid $(prop "$s" MainPID), restarts $r0 -> $(prop "$s" NRestarts), $(( ($(ms) - t0) / 1000 ))s incl. alert)"
   [ $ok = 1 ] || FAILS=$((FAILS + 1))
 done

@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { DB } from "../src/lib/db.js";
+import { outOfSample } from "../src/scoring/oos.js";
 import { applyScores, scoreWallets } from "../src/scoring/score.js";
 import { Curve, key, memDb, testConfig } from "./helpers.js";
 
 const T0 = Date.UTC(2026, 9, 20, 0, 0, 0);
-const cfg = testConfig({ scoring: { min_positions: 5, max_tokens_per_day: 30, min_median_hold_s: 20 } });
+const cfg = testConfig({ scoring: { min_positions: 5, min_copy_trades: 3, max_tokens_per_day: 30, min_median_hold_s: 20 } });
 
 /**
  * 40 launches, 10 minutes apart. On each:
@@ -108,5 +109,37 @@ describe("wallet scoring", () => {
     const active = (db.prepare("SELECT wallet FROM tracked_wallets WHERE active = 1 ORDER BY wallet").all() as { wallet: string }[]).map((r) => r.wallet);
     expect(active.sort()).toEqual([m.good, manual].sort());
     expect(db.prepare("SELECT count(*) n FROM wallet_scores WHERE eligible = 1").get()).toEqual({ n: 1 });
+  });
+
+  it("needs scoring.min_copy_trades simulated follower trades before a wallet can be followed", () => {
+    const db = memDb();
+    const m = market(db);
+    const strict = { ...cfg.scoring, min_copy_trades: 30 };
+    const good = scoreWallets(db, strict, cfg.paper, m.now).find((s) => s.wallet === m.good)!;
+    expect(good).toMatchObject({ copy_trades: 10, eligible: false, reject_reason: "only 10 copyable trades < 30 (0 missed on slippage)" });
+  });
+});
+
+describe("out-of-sample check", () => {
+  it("scores on the older days and measures the same wallet on the newest ones, without double counting", () => {
+    const db = memDb();
+    const fader = key();
+    // 20 launches 2h apart; FADER's first 10 entries run +50% after our delayed fill, the last 10 drop 20%
+    for (let i = 0; i < 20; i++) {
+      const created = T0 + i * 7_200_000;
+      const c = new Curve(db, key(), key(), created, 1000 + i * 1000).insertToken();
+      const g = c.buy(fader, 0.5, created + 20_000);
+      c.movePrice(i < 10 ? 1.5 : 0.8, created + 25_000);
+      c.sell(fader, g.tokens, created + 60_000);
+      c.movePrice(1.0, created + 70_000);
+    }
+    const now = T0 + 40 * 3_600_000; // split at T0+20h: launches 0-9 in-sample, 10-19 out-of-sample
+    const sc = { ...cfg.scoring, lookback_days: 2, oos_days: 20 / 24 };
+    const { splitAt, rows } = outOfSample(db, sc, cfg.paper, now);
+    expect(splitAt).toBe(T0 + 20 * 3_600_000);
+    const r = rows.find((x) => x.wallet === fader)!;
+    expect(r).toMatchObject({ is_trades: 10, oos_trades: 10, is_eligible: true, is_rank: 1 });
+    expect(r.is_roi!).toBeGreaterThan(0.2);
+    expect(r.oos_roi!).toBeLessThan(-0.15); // looked great in-sample, lost money after
   });
 });

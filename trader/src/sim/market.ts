@@ -24,12 +24,22 @@ export interface CostModel {
   tokenAccountRentSol: number;
 }
 
+/** Where the money went on one fill, in SOL. Slippage = price impact + extra slippage vs the spot price we traded at. */
+export interface CostBreakdown {
+  platformSol: number; // pump.fun / PumpSwap protocol + creator (+ LP) fees
+  executorSol: number; // PumpPortal fee
+  prioritySol: number; // fixed per transaction
+  slippageSol: number;
+  rentSol: number; // token account rent: paid on the buy, refunded on the sell (negative)
+}
+
 export interface BuyResult {
   tokens: number; // raw units
   curveSol: number; // SOL that went into the curve/pool, before fees
   feesSol: number; // venue + executor + priority
   rentSol: number;
   price: number; // effective SOL per whole token, venue fees excluded (comparable to spot)
+  costs: CostBreakdown;
 }
 
 export interface SellResult {
@@ -37,7 +47,19 @@ export interface SellResult {
   grossSol: number;
   feesSol: number;
   price: number;
+  costs: CostBreakdown; // rentSol is 0 here: the refund is the caller's to add
 }
+
+export const zeroCosts = (): CostBreakdown => ({ platformSol: 0, executorSol: 0, prioritySol: 0, slippageSol: 0, rentSol: 0 });
+
+export function addCosts(a: CostBreakdown, b: CostBreakdown): CostBreakdown {
+  return {
+    platformSol: a.platformSol + b.platformSol, executorSol: a.executorSol + b.executorSol, prioritySol: a.prioritySol + b.prioritySol,
+    slippageSol: a.slippageSol + b.slippageSol, rentSol: a.rentSol + b.rentSol,
+  };
+}
+
+export const totalCost = (c: CostBreakdown) => c.platformSol + c.executorSol + c.prioritySol + c.slippageSol + c.rentSol;
 
 const DEFAULT_FEE_RATE = 0.0125;
 
@@ -65,6 +87,10 @@ export function simulateBuy(m: MarketState, budgetSol: number, c: CostModel, pay
     feesSol: curveSol * (m.feeRate + exec) + c.priorityFeeSol,
     rentSol: rent,
     price: curveSol / (tokens / 1e6),
+    costs: {
+      platformSol: curveSol * m.feeRate, executorSol: curveSol * exec, prioritySol: c.priorityFeeSol,
+      slippageSol: curveSol - (Math.floor(tokens) / 1e6) * m.price, rentSol: rent,
+    },
   };
 }
 
@@ -73,7 +99,13 @@ export function simulateSell(m: MarketState, tokens: number, c: CostModel): Sell
   let gross = (m.vSol * tokens) / (m.vToken + tokens) / 1e9;
   gross *= 1 - c.extraSlippageBps / 10_000;
   const fees = gross * (m.feeRate + c.executorFeeBps / 10_000) + c.priorityFeeSol;
-  return { grossSol: gross, feesSol: fees, netSol: Math.max(0, gross - fees), price: tokens > 0 ? gross / (tokens / 1e6) : 0 };
+  return {
+    grossSol: gross, feesSol: fees, netSol: Math.max(0, gross - fees), price: tokens > 0 ? gross / (tokens / 1e6) : 0,
+    costs: {
+      platformSol: gross * m.feeRate, executorSol: (gross * c.executorFeeBps) / 10_000, prioritySol: c.priorityFeeSol,
+      slippageSol: (tokens / 1e6) * m.price - gross, rentSol: 0,
+    },
+  };
 }
 
 /** Slippage of our effective price against a reference (leader's) price, in bps. Positive = worse. */

@@ -63,7 +63,7 @@ describe("PaperEngine entries", () => {
     expect(pos(s.db).status).toBe("pending");
     expect(balance(s.engine)).toBeCloseTo(1 - 0.02, 12); // reserved immediately
 
-    s.curve.movePrice(1.05, at + 1_000); // other buyers land inside our delay window
+    s.curve.movePrice(1.015, at + 1_000); // other buyers land inside our delay window (inside the 3% limit)
     s.curve.movePrice(1.05, at + 2_000); // ...and after it (must NOT affect our fill)
     const expected = simulateBuy(stateNow(s.db, s.curve.mint, at + cfg.execution_delay_ms), 0.02, costs)!;
 
@@ -77,14 +77,14 @@ describe("PaperEngine entries", () => {
     expect(p.entry_price).toBeCloseTo(expected.price, 15);
     const fill = s.db.prepare("SELECT * FROM paper_fills").get() as { slippage_bps: number; delay_ms: number; ok: number };
     expect(fill).toMatchObject({ ok: 1, delay_ms: 1500 });
-    expect(fill.slippage_bps).toBeGreaterThan(400); // the 5% move happened before we landed
+    expect(fill.slippage_bps).toBeGreaterThan(150); // the 1.5% move happened before we landed
     expect(s.events).toEqual(["entry"]);
   });
 
   it("fails the order when price ran past the slippage limit, and charges only the network fee", () => {
     const s = setup();
     const { at } = leaderBuys(s);
-    s.curve.movePrice(1.2, at + 500); // +20% > 15% limit
+    s.curve.movePrice(1.2, at + 500); // +20% > 3% limit
     s.c.advance(cfg.execution_delay_ms + INGEST_MARGIN_MS);
     s.engine.tick();
     expect(pos(s.db)).toMatchObject({ status: "failed", exit_reason: expect.stringMatching(/slippage/) });
@@ -104,6 +104,22 @@ describe("PaperEngine entries", () => {
     const s = setup();
     leaderBuys(s);
     expect(s.db.prepare("SELECT kind, mint, priority FROM watchlist").get()).toEqual({ kind: "curve", mint: s.curve.mint, priority: 1 });
+  });
+});
+
+describe("PaperEngine leader concentration", () => {
+  it("counts the leader's share over our last 20 non-failed entries", () => {
+    const s = setup();
+    const other = key();
+    const add = (wallet: string, status = "closed") => s.db.prepare(`INSERT INTO paper_positions (signal_id, mint, leader_wallet, status, size_sol, leader_price, entry_due_at)
+      VALUES (?, ?, ?, ?, 0.02, 1, 0)`).run(signal(s.db, key()), key(), wallet, status);
+    for (let i = 0; i < 5; i++) add(s.leader);
+    expect(leaderBuys(s).decision).toMatchObject({ ok: false, reason: expect.stringMatching(/leader has 5 of our last 20/) });
+    for (let i = 0; i < 3; i++) add(s.leader, "failed"); // missed fills aren't trades
+    for (let i = 0; i < 15; i++) add(other);
+    expect(leaderBuys(s).decision).toMatchObject({ ok: false }); // still 5 of the last 20
+    add(other); // the oldest of the 5 slides out of the window
+    expect(leaderBuys(s).decision).toMatchObject({ ok: true });
   });
 });
 

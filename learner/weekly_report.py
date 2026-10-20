@@ -1,6 +1,6 @@
-"""Weekly markdown report: what is and isn't working in paper trading.
+"""Weekly markdown report, in plain English: is paper trading working, and what is and isn't.
 
-Writes reports/weekly-<date>.md; the notifier sends new reports to Telegram.
+Writes reports/weekly-<date>.md; the notifier sends a 📊 summary message plus this file to Telegram.
 Phase 4 adds model results (feature importances, backtest) to this report.
 Usage: python learner/weekly_report.py [--db path] [--days 7]
 """
@@ -9,6 +9,8 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
+import shutil
 import sqlite3
 import sys
 import time
@@ -18,6 +20,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "shared"))
 from migrate import connect, migrate  # noqa: E402
+
+sys.path.insert(0, str(ROOT / "learner"))
+import experiments as ex  # noqa: E402
+import slippage_section  # noqa: E402
 
 
 def pct(x: float | None) -> str:
@@ -46,11 +52,90 @@ def group(c: sqlite3.Connection, key_sql: str, since: int, until: int, order: st
     ).fetchall()
 
 
+def ts(ms: int | None, fmt: str = "%Y-%m-%d %H:%M") -> str:
+    return "-" if not ms else time.strftime(fmt, time.gmtime(ms / 1000))
+
+
+TRADES_TO_JUDGE = 50  # same as TRADES_TO_JUDGE in trader/src/notifier/messages.ts
+
+EXITS = {
+    "leader_exit": "the wallet we copied sold",
+    "stop_loss": "stop loss (price fell 25% below what we paid)",
+    "time_exit": "held for the 30-minute maximum",
+    "kill_switch": "trading was halted",
+}
+
+# Plain words for the signal engine's skip reasons (the Telegram messages use
+# trader/src/notifier/messages.ts; this is the short version for the report's table).
+SKIPS = [
+    ("venue ", "on an exchange we don't use yet"),
+    ("leader buy ", "the wallet's buy was too small"),
+    ("token launch not seen", "we missed the token's launch"),
+    ("token age ", "token too new or too old"),
+    ("mayhem mode", "\"mayhem mode\" token"),
+    ("dev launched ", "creator launches lots of tokens (scam pattern)"),
+    ("leader is the token's dev", "the wallet created the token itself"),
+    ("curve SOL ", "too little money in the token, or about to graduate"),
+    ("tracked buyers", "not enough of our wallets bought"),
+    ("re-entry cooldown", "traded this token less than an hour ago"),
+    ("top10 holders", "a few wallets owned too much of it"),
+    ("dev holds ", "the creator still owned a big share"),
+    ("dev sold ", "the developer sold their tokens (rug warning)"),
+    ("on-chain check failed", "safety checks couldn't run"),
+    ("score ", "the wallet's track record isn't good enough"),
+]
+
+
+DROPS = [
+    (r"median hold", "sells too fast for us to copy"),
+    (r"follower ROI", "copying it would have lost money"),
+    (r"closed positions", "not enough trades to judge it"),
+    (r"copyable entries", "too few trades we could have copied in time"),
+    (r"looks like a bot", "trades so many tokens it looks like a bot"),
+    (r"from snipes", "its profit came from buying in a launch's first second, which we can't copy"),
+    (r"cold|no trades", "stopped trading"),
+]
+
+FEEDS = {
+    "all": "the data collector was offline",
+    "helius": "the feed we find new wallets with was interrupted",
+    "firehose": "the feed we find new wallets with was interrupted",
+    "targeted": "the feed that watches our wallets was interrupted",
+    "pumpportal": "the new-token feed was interrupted",
+}
+
+
+def plain_drop(reason: str | None) -> str:
+    import re
+
+    for pattern, text in DROPS:
+        if reason and re.search(pattern, reason):
+            return text
+    return "no longer one of the best"
+
+
+def plain_skip(reason: str) -> str:
+    for prefix, text in SKIPS:
+        if reason.startswith(prefix) or prefix in reason:
+            return text
+    return "other"
+
+
+def verdict(closed: int, pnl_all: float, start: float, pnl_week: float) -> str:
+    if closed < TRADES_TO_JUDGE:
+        return f"Too early to tell: {closed} paper trades so far, and we want at least {TRADES_TO_JUDGE} before judging."
+    roi = pct(pnl_all / start)
+    if pnl_all > 0 and pnl_week >= 0:
+        return f"Looking good so far: {roi} over {closed} paper trades. Keep watching a few more weeks before thinking about real money."
+    if pnl_all > 0:
+        return f"Mixed: {roi} overall, but down this week. Keep watching."
+    return f"Not yet: {roi} over {closed} paper trades. It isn't ready for real money."
+
+
 def build(c: sqlite3.Connection, now_ms: int, days: int) -> str:
     since = now_ms - days * 86_400_000
     end = time.strftime("%Y-%m-%d", time.gmtime(now_ms / 1000))
     start = time.strftime("%Y-%m-%d", time.gmtime(since / 1000))
-    md = [f"# Weekly report {start} → {end}", "", "_Paper trading. All PnL after simulated fees, slippage and delay._", ""]
 
     acct = c.execute("SELECT balance_sol, start_balance FROM paper_account WHERE id = 1").fetchone()
     hb = c.execute("SELECT info FROM service_heartbeats WHERE service = 'trader'").fetchone()
@@ -62,13 +147,29 @@ def build(c: sqlite3.Connection, now_ms: int, days: int) -> str:
         (since, now_ms),
     ).fetchone()
     n, wins, missed = n or 0, wins or 0, missed or 0
-    md += ["## Summary", ""]
-    if acct:
-        md.append(f"- Equity **{equity:.4f} SOL** ({pct((equity - acct[1]) / acct[1])} since start, start {acct[1]:g} SOL)")
+    closed_all, pnl_all = c.execute(
+        "SELECT SUM(status='closed'), COALESCE(SUM(pnl_sol),0) FROM paper_positions WHERE status IN ('closed','failed') AND closed_at < ?", (now_ms,)
+    ).fetchone()
+    start_bal = acct[1] if acct else 1.0
+
+    md = [f"# Weekly report: {start} to {end} (PAPER, practice money)", ""]
+    if acct and equity is not None:
+        md.append(f"- **Balance:** {equity:.4f} SOL, {pct((equity - start_bal) / start_bal)} since we started with {start_bal:g} SOL")
     md += [
-        f"- This week: **{n} trades**, {wins} wins ({f'{wins / n * 100:.0f}%' if n else '-'} win rate), "
-        f"**{sol(pnl)} SOL**, average {pct(avg_roi)} per trade",
-        f"- Missed fills (price ran past the slippage limit or similar): {missed}",
+        f"- **This week:** {sol(pnl)} SOL from {n} trades, {wins} won" + (f" ({wins / n * 100:.0f}%)" if n else ""),
+        f"- **Is it working yet?** {verdict(closed_all or 0, pnl_all, start_bal, pnl)}",
+        "",
+        "All results are after the fees, price movement and delay a real trade would have had.",
+        "",
+        "## What the words mean",
+        "",
+        "- **Result (SOL):** profit or loss in SOL. **Average per trade:** the average gain or loss as a % of what we put in.",
+        "- **Slippage:** the price moving against us between the copied wallet's buy and ours.",
+        "- **Stop loss:** a safety rule that sells when the price falls 25% below what we paid.",
+        "- **Token age:** how long after the token's launch we bought it.",
+        "- **N of our wallets bought it:** how many of the wallets we follow bought the same token within 2 minutes.",
+        "",
+        f"Average per trade this week: {pct(avg_roi)}. Buys that didn't go through (the price jumped too fast): {missed}.",
         "",
     ]
 
@@ -77,29 +178,31 @@ def build(c: sqlite3.Connection, now_ms: int, days: int) -> str:
     by_exit = group(c, "p.exit_reason", since, now_ms)
     by_age = group(
         c,
-        """CASE WHEN json_extract(s.features,'$.token_age_s') < 30 THEN 'a <30s'
-                WHEN json_extract(s.features,'$.token_age_s') < 120 THEN 'b 30s-2m'
-                WHEN json_extract(s.features,'$.token_age_s') < 600 THEN 'c 2-10m' ELSE 'd >10m' END""",
+        """CASE WHEN json_extract(s.features,'$.token_age_s') < 30 THEN 'a: under 30 seconds'
+                WHEN json_extract(s.features,'$.token_age_s') < 120 THEN 'b: 30 seconds to 2 minutes'
+                WHEN json_extract(s.features,'$.token_age_s') < 600 THEN 'c: 2 to 10 minutes' ELSE 'd: over 10 minutes' END""",
         since, now_ms,
     )
-    by_conf = group(c, "COALESCE(json_extract(s.features,'$.confirmations'),1)", since, now_ms)
+    by_conf = group(c, "COALESCE(json_extract(s.features,'$.confirmations'),1) || ' of our wallets bought it'", since, now_ms)
     working, not_working = [], []
     for k, cnt, w, p, roi in by_leader:
         if cnt >= 3:
-            (working if p > 0 else not_working).append(f"leader `{k[:8]}…`: {cnt} trades, {sol(p)} SOL, {pct(roi)} avg")
-    for label, rows in (("exit", by_exit), ("token age", by_age), ("confirmations", by_conf)):
-        for k, cnt, w, p, roi in rows:
+            (working if p > 0 else not_working).append(f"wallet `{k[:4]}…{k[-4:]}`: {cnt} trades, {sol(p)} SOL, {pct(roi)} per trade")
+    for label, rows_ in (("sold because", by_exit), ("token age", by_age), ("when", by_conf)):
+        for k, cnt, w, p, roi in rows_:
             if cnt >= 3:
-                (working if p > 0 else not_working).append(f"{label} {k}: {cnt} trades, {sol(p)} SOL, {pct(roi)} avg")
-    md += ["## What is working", ""] + ([f"- {x}" for x in working] or ["- nothing with at least 3 trades yet"]) + [""]
-    md += ["## What isn't", ""] + ([f"- {x}" for x in not_working] or ["- nothing with at least 3 trades yet"]) + [""]
+                name = EXITS.get(k, k) if label == "sold because" else str(k).split(": ", 1)[-1]
+                (working if p > 0 else not_working).append(f"{label} {name}: {cnt} trades, {sol(p)} SOL, {pct(roi)} per trade")
+    md += ["## What is making money", ""] + ([f"- {x}" for x in working] or ["- nothing with at least 3 trades yet"]) + [""]
+    md += ["## What is losing money", ""] + ([f"- {x}" for x in not_working] or ["- nothing with at least 3 trades yet"]) + [""]
 
-    def rows(data):
-        return [[str(k), str(cnt), f"{(w or 0) / cnt * 100:.0f}%", sol(p), pct(roi)] for k, cnt, w, p, roi in data]
+    def rows(data, name=lambda k: str(k)):
+        return [[name(k), str(cnt), f"{(w or 0) / cnt * 100:.0f}%", sol(p), pct(roi)] for k, cnt, w, p, roi in data]
 
-    hdr = ["", "trades", "win", "PnL SOL", "avg ROI"]
-    md += ["## Breakdown", "", "### By exit reason", "", table(hdr, rows(by_exit)), "### By token age at entry", "", table(hdr, rows(by_age)),
-           "### By leader", "", table(hdr, [[f"`{r[0][:8]}…`", *r[1:]] for r in rows(by_leader)])]
+    hdr = ["", "trades", "won", "result (SOL)", "average per trade"]
+    md += ["## Details", "", "### Why we sold", "", table(hdr, rows(by_exit, lambda k: EXITS.get(k, str(k)))),
+           "### Token age when we bought", "", table(hdr, rows(by_age, lambda k: str(k).split(": ", 1)[-1])),
+           "### By wallet we copied", "", table(hdr, [[f"`{r[0][:4]}…{r[0][-4:]}`", *r[1:]] for r in rows(by_leader)])]
 
     # ---- signals ----
     total, entered, blocked = c.execute(
@@ -107,10 +210,13 @@ def build(c: sqlite3.Connection, now_ms: int, days: int) -> str:
     ).fetchone()
     reasons: Counter[str] = Counter()
     for (r,) in c.execute("SELECT reasons FROM signals WHERE decision = 'reject' AND ts >= ? AND ts < ?", (since, now_ms)):
-        for reason in json.loads(r):
-            reasons[_bucket(reason)] += 1
-    md += ["## Signals", "", f"{total or 0} evaluated, {entered or 0} entered, {blocked or 0} blocked by risk.", "",
-           table(["rejection reason", "count"], [[k, str(v)] for k, v in reasons.most_common(10)])]
+        rs = json.loads(r)
+        reasons[plain_skip(rs[0]) if rs else "other"] += 1  # the first check it failed
+    md += ["## Buys by our wallets", "",
+           f"Our wallets made {total or 0} buys. We copied {entered or 0}; our safety limits stopped {blocked or 0}; the rest we skipped.", "",
+           table(["why we skipped", "times"], [[k, str(v)] for k, v in reasons.most_common(10)])]
+
+    md += slippage_section.section(c, since, now_ms, table, sol, pct)
 
     # ---- wallets ----
     tracked = c.execute("SELECT count(*) FROM tracked_wallets WHERE active = 1").fetchone()[0]
@@ -118,30 +224,31 @@ def build(c: sqlite3.Connection, now_ms: int, days: int) -> str:
         "SELECT deactivated_reason, count(*) FROM tracked_wallets WHERE deactivated_at >= ? GROUP BY 1 ORDER BY 2 DESC", (since,)
     ).fetchall()
     added = c.execute("SELECT count(*) FROM tracked_wallets WHERE added_at >= ? AND active = 1", (since,)).fetchone()[0]
-    md += ["## Tracked wallets", "", f"{tracked} tracked now; {added} added this week.", ""]
-    md += [f"- dropped: {r} ({n})" for r, n in dropped] + [""]
+    md += ["## Wallets we follow", "", f"{tracked} now; {added} added this week.", ""]
+    drops: Counter[str] = Counter()
+    for r, k in dropped:
+        drops[plain_drop(r)] += k
+    md += [f"- dropped {k}: {r}" for r, k in drops.most_common()] + [""]
 
     # ---- data health ----
     usage = c.execute(
         "SELECT day, SUM(CASE WHEN source != 'pumpportal' THEN bytes END) FROM stream_usage WHERE day >= ? GROUP BY day ORDER BY day", (start,)
     ).fetchall()
-    restarts = c.execute("SELECT count(*) FROM collector_gaps WHERE source = 'all' AND started_at >= ?", (since,)).fetchone()[0]
+    restarts = c.execute("SELECT count(*) FROM alerts WHERE kind = 'restart' AND ts >= ?", (since,)).fetchone()[0] \
+        if _has_col(c, "alerts", "kind") else 0
     outages = c.execute(
         """SELECT source, count(*), SUM(COALESCE(ended_at, ?) - started_at) FROM collector_gaps
            WHERE started_at >= ? AND reason NOT IN ('off-hours', 'daily budget used', 'stopped') GROUP BY source""",
         (now_ms, since),
     ).fetchall()
-    md += ["## Data health", "", f"- collector restarts: {restarts}"]
-    md += [f"- {src} outages: {cnt}, total {(ms or 0) / 60000:.0f} min" for src, cnt, ms in outages]
-    md += [f"- Helius {d}: {(b or 0) / 1e6:.0f} MB" for d, b in usage] + [""]
+    md += ["## Is the bot healthy?", "", f"- Unplanned restarts (it fixed itself each time): {restarts}"]
+    md += [f"- {FEEDS.get(src, f'the {src} feed was interrupted').capitalize()}: {cnt} times, {(ms or 0) / 60000:.0f} minutes in total" for src, cnt, ms in outages]
+    md += [f"- Data used on {d}: {(b or 0) / 1e6:.0f} MB from Helius (our market data provider)" for d, b in usage] + [""]
     return "\n".join(md)
 
 
-def _bucket(reason: str) -> str:
-    """Collapse numbers so reasons group: 'token age 2400s outside [3, 1800]' -> 'token age Ns outside [N, N]'."""
-    import re
-
-    return re.sub(r"(?<![A-Za-z0-9.])-?\d+(\.\d+)?", "N", reason)
+def _has_col(c: sqlite3.Connection, table_name: str, col: str) -> bool:
+    return any(r[1] == col for r in c.execute(f"PRAGMA table_info({table_name})"))
 
 
 def main() -> int:

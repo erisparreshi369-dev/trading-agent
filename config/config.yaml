@@ -4,13 +4,17 @@
 
 collector:
   helius:
-    # Every Helius websocket byte is metered (~20 credits/MB). This caps ALL Helius streams per
-    # UTC day. 1500 MB ~= 30k credits/day ~= the Free plan's 1M credits/month.
-    # Developer plan (10M/month): ~15000. Measured full firehose: ~35 GB/day.
+    # Every Helius websocket byte is metered (20 credits/MB). Helius's real limit is per MONTH
+    # (Free: 1M credits); when it's used up Helius refuses everything until the month resets.
+    # This is OUR per-UTC-day share of it: 1500 MB = 30k credits/day = 930k/month, leaving room
+    # for RPC calls. Developer plan (10M/month): ~15000. Measured full firehose: ~35 GB/day.
     daily_mb_cap: 1500
-    # Kept back for targeted streams (tracked wallets, held tokens); the firehose stops before
-    # eating into it, so following keeps working all day.
-    targeted_reserve_mb: 300
+    # Lighter data modes as the day's budget runs down (and a Telegram warning at each step):
+    #   1st: firehose off (no new-wallet discovery), no pool watching after migration
+    #   2nd: only tracked wallets, tokens they traded in the last 30 min, and open trades
+    #   3rd: only open trades; no new trades until 00:00 UTC
+    # Open trades stay watched until they close, even past 100%.
+    steps_pct: [70, 85, 95]
 
   firehose:
     # Full pump.fun stream, used to DISCOVER wallets. Runs inside these UTC hours until its share
@@ -52,6 +56,7 @@ collector:
 scoring:
   lookback_days: 7
   min_positions: 8              # closed, fully observed positions needed to be scored
+  min_copy_trades: 30           # simulated follower trades needed before a wallet can be followed
   max_tokens_per_day: 300       # more than this looks like a bot / volume farmer
   snipe_window_slots: 2         # entries this close to launch can't be copied
   max_snipe_pnl_frac: 0.5       # reject if more than this share of profit came from snipes
@@ -61,6 +66,7 @@ scoring:
   copy_roi_cap: 1.0             # cap each trade's ROI at +100% before averaging: one 10x shouldn't carry a losing wallet
   track_top_n: 25
   cold_after_hours: 48          # tracked wallet with no trades for this long is dropped
+  oos_days: 2                   # out-of-sample check: score on the older days, measure on the newest oos_days
 
 signals:
   venues: [curve]               # add amm to follow buys after migration
@@ -84,12 +90,49 @@ paper:
   priority_fee_sol: 0.0003      # per transaction
   executor_fee_bps: 50          # PumpPortal Local API fee, charged both ways
   extra_slippage_bps: 50        # same-slot competition the replay can't see
-  max_slippage_bps: 1500        # worse than this vs the leader's price = order fails, like a live slippage limit
+  # Max slippage, in bps (100 bps = 1%): how much higher than the copied wallet our buy price may be.
+  # More than this and we skip the buy ("skipped: price moved too much"). Sells are never blocked:
+  # we always exit, and the slippage is logged. The learner may lower this, never raise it.
+  max_slippage_bps: 300         # 3%
   token_account_rent_sol: 0.00203928  # paid on first buy, refunded when the account is closed on exit
   follow_leader_exit: true      # sell when the leader sells
+
+shadow:
+  # Every signal is also paper-traded under each variant below, in parallel, at a fixed size and
+  # without balance or portfolio limits (open positions, daily caps, wallet share): each variant
+  # measures a rule, not a portfolio. The hard stop loss and 30-min time exit always apply.
+  # Results are settled from the recorded tape once the outcome is known (at most ~32 min later).
+  # A variant is the live settings plus its overrides:
+  #   filters: any `signals:` key, or `none` (take every signal, rejected ones included)
+  #   exit:    leader_exit, take_profit_pct, trailing_stop_pct (from the peak), max_hold_s (<= 1800)
+  #   size_sol
+  #   max_slippage_bps (instead of paper.max_slippage_bps)
+  # Loosening a filter means more signals get the on-chain checks (2 RPC credits each).
+  enabled: true
+  size_sol: 0.02
+  variants:
+    live: {}                                             # = live settings: checks the shadow sim against real paper trades
+    all_signals: { filters: none }                       # what following everything would have done
+    tp_50: { exit: { take_profit_pct: 50 } }             # leader exit or +50%, whichever first
+    tp_100: { exit: { take_profit_pct: 100 } }
+    trail_20: { exit: { leader_exit: false, trailing_stop_pct: 20 } }
+    trail_35: { exit: { leader_exit: false, trailing_stop_pct: 35 } }
+    hold_1m: { exit: { leader_exit: false, max_hold_s: 60 } }
+    hold_5m: { exit: { leader_exit: false, max_hold_s: 300 } }
+    buy_0.05: { filters: { min_leader_buy_sol: 0.05 } }
+    buy_0.5: { filters: { min_leader_buy_sol: 0.5 } }
+    age_2m: { filters: { token_age_s: [3, 120] } }
+    conf_2: { filters: { min_confirmations: 2 } }
+    top10_60: { filters: { max_top10_pct: 60 } }
+    size_0.05: { size_sol: 0.05 }                        # cost share vs size
+    size_0.1: { size_sol: 0.1 }
+    size_0.25: { size_sol: 0.25 }
+    no_slip_limit: { max_slippage_bps: 100000 }          # what the trades skipped for slippage would have done (weekly report)
 
 notifier:
   watch_services: [collector, trader]  # alert if one of these stops reporting
   stale_after_s: 300
-  daily_summary_utc: "00:05"          # summary of the previous UTC day
-  trade_alerts: true                  # a message for every paper buy/sell/missed fill
+  daily_summary_utc: "00:05"          # daily report covering the previous UTC day
+  trade_alerts: true                  # a message for every trade we follow (skipped ones go in the hourly summary)
+  timezone: UTC                       # clock times in messages, e.g. Europe/London; daily limits still reset at 00:00 UTC
+  usd_prices: true                    # show dollar amounts next to SOL (SOL price from CoinGecko, refreshed every 10 min)

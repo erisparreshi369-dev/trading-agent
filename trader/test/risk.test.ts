@@ -10,7 +10,7 @@ import { clock, memDb } from "./helpers.js";
 
 const killFile = () => join(mkdtempSync(join(tmpdir(), "kill-")), "KILL");
 const acct = (over: Partial<AccountSnapshot> = {}): AccountSnapshot => ({
-  equity: 1, freeBalance: 1, startBalance: 1, openPositions: 0, entriesToday: 0, ...over,
+  equity: 1, freeBalance: 1, startBalance: 1, openPositions: 0, entriesToday: 0, leaderRecentEntries: 0, ...over,
 });
 
 describe("risk limits are not changeable at runtime", () => {
@@ -65,6 +65,12 @@ describe("RiskManager entries", () => {
     const r = new RiskManager(memDb(), killFile());
     expect(r.checkEntry(acct({ openPositions: RISK.MAX_OPEN_POSITIONS }))).toMatchObject({ ok: false, reason: expect.stringMatching(/max open/) });
     expect(r.checkEntry(acct({ entriesToday: RISK.MAX_ENTRIES_PER_DAY }))).toMatchObject({ ok: false, reason: expect.stringMatching(/per day/) });
+  });
+
+  it("caps any one leader at 25% of our last 20 entries (5), also while there are fewer", () => {
+    const r = new RiskManager(memDb(), killFile());
+    expect(r.checkEntry(acct({ leaderRecentEntries: 4 }))).toMatchObject({ ok: true });
+    expect(r.checkEntry(acct({ leaderRecentEntries: 5 }))).toMatchObject({ ok: false, reason: "leader has 5 of our last 20 entries (max 5)" });
   });
 
   it("keeps a free-balance reserve for exit fees", () => {

@@ -1,7 +1,8 @@
 import type { PaperConfig, ScoringConfig } from "../lib/config.js";
 import type { DB } from "../lib/db.js";
 import { RISK } from "../risk/limits.js";
-import { simulateBuy, simulateSell, slippageBps, stateFromTrade, type CostModel, type TradeRowLike } from "../sim/market.js";
+import { simulateFollow, type ExitRule } from "../sim/follow.js";
+import type { CostBreakdown, CostModel, TradeRowLike } from "../sim/market.js";
 
 /**
  * Wallet scoring.
@@ -33,7 +34,7 @@ export interface PositionStats {
   proceeds: number;
   sniped: boolean;
   buySol: number;
-  copy: { pnl: number; roi: number; entryAt: number; exitAt: number; entryPrice: number; exitPrice: number; trigger: string } | "missed" | "unknown";
+  copy: { pnl: number; roi: number; entryAt: number; exitAt: number; entryPrice: number; exitPrice: number; trigger: string; costs: CostBreakdown } | "missed" | "unknown";
   mint: string;
 }
 
@@ -89,14 +90,20 @@ export function scoreWallets(
   db: DB, cfg: ScoringConfig, paper: PaperConfig, now = Date.now(),
   /** Every fully observed position, for debugging and as learner labels. */
   onPosition?: (p: PositionStats) => void,
+  /** Score only positions entered from `since` (default: lookback_days before now). Data after `now` is never read. */
+  opts: { since?: number } = {},
 ): WalletScore[] {
-  const since = now - cfg.lookback_days * 86_400_000;
+  const since = opts.since ?? now - cfg.lookback_days * 86_400_000;
   const cost: CostModel = {
     priorityFeeSol: paper.priority_fee_sol,
     executorFeeBps: paper.executor_fee_bps,
     extraSlippageBps: paper.extra_slippage_bps,
     tokenAccountRentSol: paper.token_account_rent_sol,
   };
+  const exitRule: ExitRule = {
+    leaderExit: paper.follow_leader_exit, stopLossPct: RISK.STOP_LOSS_PCT, takeProfitPct: null, trailingStopPct: null, maxHoldMs: RISK.TIME_EXIT_MS,
+  };
+
   const tracked = new Set((db.prepare("SELECT wallet FROM tracked_wallets WHERE active = 1").all() as { wallet: string }[]).map((r) => r.wallet));
   const loadGaps = (sources: string[]) =>
     (db.prepare(`SELECT started_at s, COALESCE(ended_at, ?) e FROM collector_gaps WHERE source IN (${sources.map(() => "?").join(",")}) AND COALESCE(ended_at, ?) > ?`)
@@ -115,13 +122,13 @@ export function scoreWallets(
 
   const stmt = db.prepare(`SELECT id, mint, wallet, is_buy, token_amount, sol_lamports, fee_lamports, creator_fee_lamports, venue,
     v_sol_reserves, v_token_reserves, real_token_reserves, price_sol, received_at, slot
-    FROM trades WHERE received_at > ? ORDER BY mint, received_at, id`);
+    FROM trades WHERE received_at > ? AND received_at <= ? ORDER BY mint, received_at, id`);
   let current: Trade[] = [];
   const flushToken = () => {
     if (current.length) processToken(current);
     current = [];
   };
-  for (const t of stmt.iterate(since) as IterableIterator<Trade>) {
+  for (const t of stmt.iterate(since, now) as IterableIterator<Trade>) {
     if (current.length && current[0]!.mint !== t.mint) flushToken();
     current.push(t);
   }
@@ -155,7 +162,7 @@ export function scoreWallets(
       while (i < wt.length && !wt[i]!.is_buy) i++; // sells of tokens bought before the window
       if (i >= wt.length) break;
       const first = wt[i]!;
-      let held = 0, bought = 0, cost = 0, proceeds = 0, buySol = 0, firstSellAt: number | null = null, exitAt: number | null = null;
+      let held = 0, bought = 0, cost = 0, proceeds = 0, buySol = 0, exitAt: number | null = null;
       for (; i < wt.length; i++) {
         const t = wt[i]!;
         const fees = (t.fee_lamports ?? 0) + (t.creator_fee_lamports ?? 0);
@@ -167,7 +174,6 @@ export function scoreWallets(
         } else {
           held -= t.token_amount;
           proceeds += (t.sol_lamports - fees) / 1e9;
-          firstSellAt ??= t.received_at;
           if (held <= bought * 0.05) {
             exitAt = t.received_at;
             i++;
@@ -180,58 +186,22 @@ export function scoreWallets(
         : first.received_at - tok.created_at <= 1_500;
       out.push({
         wallet, mint: first.mint, entryAt: first.received_at, exitAt, closed: exitAt !== null, cost, proceeds, sniped, buySol,
-        copy: simulateCopy(first, firstSellAt, all, lastSeen),
+        copy: simulateCopy(first, all, lastSeen),
       });
     }
     return out;
   }
 
   /** Follow this buy exactly like the paper engine would. */
-  function simulateCopy(leaderBuy: Trade, leaderSellAt: number | null, all: Trade[], lastSeen: number): PositionStats["copy"] {
-    const delay = paper.execution_delay_ms;
-    const entryAt = leaderBuy.received_at + delay;
-    if (entryAt > lastSeen) return "unknown";
-    const entryState = stateAt(all, entryAt);
-    if (!entryState) return "unknown";
-    const buy = simulateBuy(entryState, cfg.copy_size_sol, cost);
-    if (!buy || slippageBps(buy.price, leaderBuy.price_sol ?? entryState.price) > paper.max_slippage_bps) return "missed";
-    // exit trigger: leader's first sell, the stop loss, or the time exit, whichever comes first
-    let trigger = entryAt + RISK.TIME_EXIT_MS;
-    let why = "time_exit";
-    if (paper.follow_leader_exit && leaderSellAt !== null && Math.max(leaderSellAt, entryAt) < trigger) {
-      trigger = Math.max(leaderSellAt, entryAt);
-      why = "leader_exit";
-    }
-    const stop = buy.price * (1 - RISK.STOP_LOSS_PCT);
-    for (const t of all) {
-      if (t.received_at <= entryAt) continue;
-      if (t.received_at >= trigger) break;
-      if (t.price_sol !== null && t.price_sol <= stop) {
-        trigger = t.received_at;
-        why = "stop_loss";
-        break;
-      }
-    }
-    const exitAt = trigger + delay;
-    if (exitAt > now) return "unknown"; // our exit hasn't happened yet
-    // if the token went quiet before exitAt, its last observed state is the market (gaps are excluded upstream)
-    const exitState = stateAt(all, exitAt);
-    if (!exitState) return "unknown";
-    const sell = simulateSell(exitState, buy.tokens, cost);
-    const pnl = sell.netSol + cost.tokenAccountRentSol - cfg.copy_size_sol;
-    return { pnl, roi: pnl / cfg.copy_size_sol, entryAt, exitAt, entryPrice: buy.price, exitPrice: sell.price, trigger: why };
-  }
-
-  function stateAt(all: Trade[], t: number) {
-    let lo = 0, hi = all.length - 1, idx = -1;
-    while (lo <= hi) {
-      const mid = (lo + hi) >> 1;
-      if (all[mid]!.received_at <= t) {
-        idx = mid;
-        lo = mid + 1;
-      } else hi = mid - 1;
-    }
-    return idx >= 0 ? stateFromTrade(all[idx]!) : null;
+  function simulateCopy(leaderBuy: Trade, all: Trade[], lastSeen: number): PositionStats["copy"] {
+    if (leaderBuy.received_at + paper.execution_delay_ms > lastSeen) return "unknown"; // tape ends before our order lands
+    const r = simulateFollow(all, {
+      leaderWallet: leaderBuy.wallet, leaderAt: leaderBuy.received_at, leaderPrice: leaderBuy.price_sol, sizeSol: cfg.copy_size_sol,
+      delayMs: paper.execution_delay_ms, maxSlippageBps: paper.max_slippage_bps, cost, exit: exitRule, dataUntil: now,
+    });
+    if (r.status === "unknown") return "unknown";
+    if (r.status === "missed") return "missed";
+    return { pnl: r.pnlSol, roi: r.roi, entryAt: r.entryAt, exitAt: r.exitAt, entryPrice: r.entryPrice, exitPrice: r.exitPrice, trigger: r.exitReason, costs: r.costs };
   }
 
   function add(p: PositionStats) {
@@ -286,7 +256,7 @@ export function scoreWallets(
       : a.tokens / days > cfg.max_tokens_per_day ? `${Math.round(a.tokens / days)} tokens/day looks like a bot`
       : s.snipe_pnl_frac > cfg.max_snipe_pnl_frac ? `${Math.round(s.snipe_pnl_frac * 100)}% of profit from snipes`
       : median !== null && median < cfg.min_median_hold_s ? `median hold ${median.toFixed(0)}s too fast to copy`
-      : a.copyN < Math.ceil(cfg.min_positions / 2) ? `only ${a.copyN} copyable entries (${a.copyMissed} missed on slippage)`
+      : a.copyN < cfg.min_copy_trades ? `only ${a.copyN} copyable trades < ${cfg.min_copy_trades} (${a.copyMissed} missed on slippage)`
       : copyRoi! <= cfg.min_copy_roi ? `follower ROI ${(copyRoi! * 100).toFixed(1)}% after costs`
       : null;
     s.eligible = s.reject_reason === null;

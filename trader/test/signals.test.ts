@@ -25,10 +25,11 @@ class FakeInfo implements TokenInfoSource {
   }
 }
 
-function setup(over: Partial<SignalsConfig> = {}, info = new FakeInfo()) {
+function setup(over: Partial<SignalsConfig> = {}, info = new FakeInfo(), shadow = false) {
   const db = memDb();
   const c = clock();
-  const cfg = testConfig({ signals: over });
+  // shadow variants off unless a test is about them: looser variants legitimately spend RPC credits
+  const cfg = testConfig({ signals: over, shadow: { enabled: shadow } });
   const trader = new Trader(db, cfg, info, join(mkdtempSync(join(tmpdir(), "k-")), "KILL"), c.now);
   trader.paper.init();
   const curve = new Curve(db, key(), key(), c.t - 60_000).insertToken({ initial_buy_tokens: 30_000_000_000_000 });

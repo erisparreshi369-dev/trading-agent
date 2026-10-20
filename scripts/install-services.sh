@@ -6,7 +6,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 UNIT_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
 NODE="$(command -v node)"
-SERVICES=(collector trader notifier)
+SERVICES=(collector trader notifier dashboard)
 TIMERS=(score weekly logrotate)
 
 if [ "${1:-}" = "--uninstall" ]; then

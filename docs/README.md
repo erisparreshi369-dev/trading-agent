@@ -55,10 +55,25 @@ Copy-trading doesn't need every trade all day:
 | PumpPortal | every launch (creator, dev buy), every migration | always | free |
 | RPC | holder concentration + dev balance per signal | per signal | 2 calls |
 
-`collector.helius.daily_mb_cap` caps **all** Helius traffic per UTC day; `targeted_reserve_mb`
-is kept back so following keeps working after discovery stops. Upgrading the Helius plan means
-raising the cap (and widening `hours_utc`), nothing else. Every period without full coverage is
-recorded in `collector_gaps`, and scoring ignores positions it didn't fully observe.
+**The data budget.** Helius's real limit is per *month* (Free: 1M credits, 20 credits/MB of
+websocket data, 1 per RPC call); once it's used up Helius refuses every request (429) until the
+month resets, RPC calls included. `collector.helius.daily_mb_cap` (1500 MB = 30k credits) is our
+per-UTC-day share of it, leaving ~70k credits/month for RPC (~1k calls/day measured). As a day's
+budget runs down the collector steps through lighter modes (`steps_pct`, collector/budget.ts),
+with a Telegram warning at each step:
+
+| used | mode | what still runs |
+|---|---|---|
+| < 70% | normal | everything |
+| 70% | light | no firehose (no new-wallet discovery), no pool watching after migration |
+| 85% | essential | tracked wallets, tokens they traded in the last 30 min, open trades |
+| 95% | open trades only | open trades; the trader opens nothing new until 00:00 UTC |
+| 100% | off | nothing from Helius, once no trade is open (open trades stay watched past 100%) |
+
+Usage is stored per hour (`stream_usage_hourly`); `make status` and the dashboard show MB/h and
+when the cap is hit at the current speed. Upgrading the Helius plan means raising the cap (and
+widening `hours_utc`), nothing else. Every period without full coverage is recorded in
+`collector_gaps`, and scoring ignores positions it didn't fully observe.
 
 ## Trading pipeline
 
@@ -92,8 +107,13 @@ enforce all of this):
 **Paper engine.** Orders fill at the market state `execution_delay_ms` after the leader's trade
 (constant-product on the real reserves, so price impact included), plus: pump fees as charged on
 that trade (~1.25%), PumpPortal's 0.5% executor fee, a priority fee per tx, extra slippage, token
-account rent (refunded on exit). Orders worse than `max_slippage_bps` vs the leader's price fail
-and cost the network fee, like a live slippage limit. Exits follow the leader's first sell, the
+account rent (refunded on exit). A buy whose price is more than `paper.max_slippage_bps` (3%) above
+the leader's is skipped ("skipped: price moved too much") and costs the network fee, like a live
+order refused by its slippage limit. Sells are never blocked; their slippage vs the price when we
+decided to sell is recorded and logged when it's over the limit. Max slippage is a *safe setting*
+(lib/safe-settings.ts): the learner may lower it via kv `learner.max_slippage_bps`, never raise
+it. The shadow variant `no_slip_limit` simulates every signal without the limit, so the weekly
+report shows what the skipped buys would have made. Exits follow the leader's first sell, the
 stop loss, the time exit, or the kill switch, with the same delay.
 
 What this means at a 1 SOL balance: positions are 0.02 SOL and a round trip costs ~6–7% before
@@ -110,6 +130,7 @@ without a login (linger), restarted 5s after any crash, logs in `logs/*.log` rot
 | `trading-collector` | streams → SQLite | always |
 | `trading-trader` | signals, risk, paper engine | always |
 | `trading-notifier` | Telegram: trades, errors, watchdog, daily summary, reports, commands | always |
+| `trading-dashboard` | read-only live web dashboard, http://localhost:8080 | always |
 | `trading-score.timer` | wallet re-scoring | daily 00:15 UTC |
 | `trading-weekly.timer` | weekly report → Telegram (model retraining joins in Phase 4) | Sundays 01:00 UTC |
 | `trading-logrotate.timer` | log rotation | daily 03:30 UTC |
@@ -120,6 +141,18 @@ service that died without a clean shutdown (kill, OOM, power loss) with a per-da
 systemd gave up on (crash loop) or a failed timer job, sent by `curl` so it works even when the
 notifier is down; daily summary 00:05 UTC; weekly report as a file.
 **Commands**: `/status`, `/pnl`, `/stop` (kill switch), accepted only from the owner's chat.
+
+**Dashboard** (`dashboard/`, Python stdlib only): one page with mode, services, live activity
+feed (launches, tracked-wallet trades, every signal with its reasons, paper fills, errors and
+restarts), money and equity curve, positions, closed trades, wallets (and why dropped), risk,
+data collection, latency, learner. It opens the database `mode=ro` + `query_only`, never imports
+trader code or reads `.env`, serves GET only and binds to loopback only (it has no login). One
+poller thread reads SQLite every second and pushes to browsers over Server-Sent Events. Risk limits
+are parsed from `limits.ts`, paper costs from `config.yaml`, so it shows what the trader enforces.
+On a VPS: `ssh -L 8080:localhost:8080 user@host`, then open http://localhost:8080.
+The Phase 4 learner should write `models/current.json`
+(`{"version", "trained_at" (ms), "metrics": {...}, "top_features": [[name, importance], ...]}`);
+the learner panel shows it, plus the newest `reports/weekly-*.md`.
 
 **Host**: sleep/suspend/hibernate masked, lid close and idle ignored (logind drop-in + XFCE power
 settings), done by `sudo bash scripts/setup-host.sh` (undo: `--undo`).
@@ -143,6 +176,7 @@ trader/src/trader    trading loop service
 trader/src/notifier  Telegram client, alerts, watchdog, commands
 trader/src/tools     verify-live, explain-wallet, kill switch, telegram-setup
 learner/             weekly report (Phase 4: model training + backtest)
+dashboard/           read-only live dashboard (server.py, data.py, static/)
 deploy/              systemd unit templates, logrotate config
 scripts/             status, install-services, setup-host (sudo), deploy, drill
 config/config.yaml   tunables — no secrets, no risk limits
@@ -158,7 +192,8 @@ make install        # npm deps, .venv, .env (chmod 600) from .env.example
 $EDITOR .env        # HELIUS_API_KEY
 make test                 # 84 tests
 make install-services     # build, install + start everything under systemd
-make status               # health, streams, timers, data, paper PnL
+make status               # health, streams, timers, data, paper PnL, dashboard URL
+open http://localhost:8080  # live dashboard (make dashboard PORT=8090 runs a foreground copy)
 make health               # one line + exit code, for scripts
 make logs S=trader        # follow a service's log (collector|trader|notifier|score|weekly)
 make drill                # restart + kill -9 every service, verify recovery and alerts

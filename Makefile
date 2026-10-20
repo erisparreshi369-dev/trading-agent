@@ -1,7 +1,7 @@
 SHELL := /bin/bash
 PY := .venv/bin/python
 
-.PHONY: install build test migrate collector trader notifier score weekly status health logs kill unkill verify-live explain install-services uninstall-services deploy drill
+.PHONY: install build test migrate collector trader notifier dashboard score weekly status health logs kill unkill verify-live explain costs install-services uninstall-services restart deploy drill
 
 install: ## install all dependencies
 	cd trader && npm ci
@@ -14,6 +14,8 @@ build:
 
 test:
 	cd trader && npx vitest run
+	$(PY) -m unittest discover -s dashboard
+	$(PY) -m unittest discover -s learner
 
 migrate:
 	$(PY) shared/migrate.py
@@ -28,6 +30,9 @@ trader: build
 notifier: build
 	cd trader && node dist/notifier/index.js | npx pino-pretty
 
+dashboard: ## run the read-only dashboard in the foreground (systemd runs it as trading-dashboard on :8080)
+	$(PY) dashboard/server.py --port $(or $(PORT),8080)
+
 score: build ## re-score wallets and update the tracked set (systemd runs it daily at 00:15 UTC)
 	cd trader && node dist/scoring/index.js
 
@@ -38,10 +43,15 @@ weekly: ## write this week's report into reports/ (systemd runs it Sundays 01:00
 install-services: ## install + start the systemd user services and timers
 	bash scripts/install-services.sh
 
+restart: ## (re)start the collector, trader and notifier, including ones systemd gave up on
+	systemctl --user reset-failed 'trading-*' 2>/dev/null || true
+	systemctl --user restart trading-collector trading-trader trading-notifier
+	@sleep 3 && systemctl --user is-active trading-collector trading-trader trading-notifier
+
 uninstall-services:
 	bash scripts/install-services.sh --uninstall
 
-logs: ## make logs S=trader  (collector|trader|notifier|score|weekly)
+logs: ## make logs S=trader  (collector|trader|notifier|dashboard|score|weekly)
 	tail -n 200 -F logs/$(or $(S),trader).log | (cd trader && npx pino-pretty)
 
 health: ## one line, exit code 0/2: for scripts and cron
@@ -64,6 +74,9 @@ verify-live: ## check event decoders against live mainnet traffic (run after pum
 
 explain: ## make explain WALLET=<address>: every scored position, leader vs follower
 	cd trader && npx tsx src/tools/explain-wallet.ts $(WALLET)
+
+costs: ## does a bigger position cut the cost share? replays every copyable position at several sizes
+	cd trader && npx tsx src/tools/cost-by-size.ts $(SIZES)
 
 drill: ## restart + kill -9 every service, verify recovery and alerts (takes a few minutes)
 	bash scripts/drill.sh

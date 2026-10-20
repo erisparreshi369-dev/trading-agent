@@ -51,6 +51,30 @@ def systemd_state(name: str) -> str:
         return "unknown"
 
 
+MODES = {"normal": "normal", "light": "LIGHT (no new-wallet discovery)", "essential": "ESSENTIAL (copied wallets + open trades only)",
+         "positions_only": "OPEN TRADES ONLY (no new trades today)", "off": "OFF (cap reached)"}
+FREE_MONTH_CREDITS = 1_000_000
+CREDITS_PER_MB = 20
+
+
+def data_budget(c: sqlite3.Connection, i: dict, now: float) -> tuple[str, str]:
+    """Helius data today: used / cap, speed, when the cap is hit at that speed, mode, and this month's credits."""
+    mb, cap = i.get("heliusMbToday", 0), i.get("heliusCapMb") or 0
+    pct = mb / cap * 100 if cap else 0
+    col = R if pct >= 95 else Y if pct >= 70 else G
+    out = f"helius today {col}{mb:.0f} / {cap:.0f} MB ({pct:.0f}%){X}"
+    if i.get("heliusMbPerHour") is not None:
+        out += f"  {i['heliusMbPerHour']:.0f} MB/h"
+        eta = i.get("heliusCapAt")
+        out += f", cap at {time.strftime('%H:%M', time.gmtime(eta / 1000))} UTC at this speed" if eta and mb < cap else ("" if mb >= cap else ", lasts the day at this speed")
+    mode = i.get("dataMode")
+    if mode:
+        out += f"  mode {G if mode == 'normal' else Y if mode in ('light', 'essential') else R}{MODES.get(mode, mode)}{X}"
+    month = time.strftime("%Y-%m", time.gmtime(now / 1000))
+    month_mb = (c.execute("SELECT COALESCE(SUM(bytes), 0) FROM stream_usage WHERE day LIKE ? AND source != 'pumpportal'", (month + "%",)).fetchone()[0]) / 1e6
+    return out, f"this month ~{month_mb * CREDITS_PER_MB / 1e3:.0f}k of {FREE_MONTH_CREDITS // 1000}k free Helius credits (our count; dashboard.helius.dev has Helius's own)"
+
+
 def check() -> int:
     """--check: one line, exit 0 healthy / 2 unhealthy. For cron, scripts and the VPS."""
     if not DB.exists():
@@ -99,10 +123,15 @@ def main() -> int:
                 return f"{name}={'up' if v else ('off' if v is None else R + 'DOWN' + X + D)}"
             fh = show("firehose") + (f" ({st['firehoseOff']})" if st.get("firehoseOff") else "")
             print(f"  {D}{'':<10} {fh}  {show('targeted')} [{st.get('targetedSubs', 0)} subs, {i.get('trackedWallets', 0)} wallets]  {show('pumpportal')}{X}")
-            print(f"  {D}{'':<10} helius today {i.get('heliusMbToday', 0)} / {i.get('heliusCapMb', '?')} MB  rss={i.get('rss_mb')}MB{X}")
+            today, month = data_budget(c, i, now)
+            print(f"  {'':<10} {today}  {D}rss={i.get('rss_mb')}MB{X}")
+            print(f"  {D}{'':<10} {month}{X}")
         elif svc == "trader":
             flags = (f" {R}KILL SWITCH ON{X}" if i.get("killed") else "") + (f" {Y}halted today (daily loss cap){X}" if i.get("haltedToday") else "")
             print(f"  {D}{'':<10} mode={i.get('mode')} tracked={i.get('tracked')} signals={i.get('signals', 0)} entered={i.get('entered', 0)} errors={i.get('errors', 0)}{X}{flags}")
+
+    dash = systemd_state("dashboard")
+    print(f"  {'dashboard':<10} {G + 'up' + X if dash == 'active' else R + dash + X}  {B}http://localhost:8080{X}  {D}(read-only, live){X}")
 
     timers = []
     for t in TIMERS:

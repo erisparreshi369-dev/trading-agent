@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Trading Agent Live</title>
+<link rel="stylesheet" href="/style.css">
+<script src="/app.js" defer></script>
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <span id="mode" class="mode mode-unknown">…</span>
+    <div>
+      <h1>trading-agent</h1>
+      <div class="sub">read-only · <span id="conn" class="conn">connecting…</span> · <span id="clock"></span></div>
+    </div>
+  </div>
+  <div id="flags" class="flags"></div>
+</header>
+<div id="problem" class="problem" hidden></div>
+
+<section id="services" class="services" aria-label="Services"></section>
+
+<div class="layout">
+  <main class="panels">
+    <section class="panel span2" aria-labelledby="h-money">
+      <h2 id="h-money">Money <small>paper, net of fees and slippage</small></h2>
+      <div id="kpis" class="kpis"></div>
+      <div class="chart-head"><h3>Equity, SOL</h3><span class="muted" id="curve-note"></span></div>
+      <div id="equity" class="chart"></div>
+    </section>
+
+    <section class="panel span2" aria-labelledby="h-pos">
+      <h2 id="h-pos">Open positions <small id="pos-count"></small></h2>
+      <div id="positions" class="table-wrap"></div>
+    </section>
+
+    <section class="panel span2" aria-labelledby="h-closed">
+      <h2 id="h-closed">Closed trades <small>latest 100</small></h2>
+      <div id="closed" class="table-wrap scroll"></div>
+    </section>
+
+    <section class="panel" aria-labelledby="h-risk">
+      <h2 id="h-risk">Risk</h2>
+      <div id="risk"></div>
+    </section>
+
+    <section class="panel" aria-labelledby="h-data">
+      <h2 id="h-data">Data collection</h2>
+      <div id="data"></div>
+    </section>
+
+    <section class="panel span2" aria-labelledby="h-wallets">
+      <h2 id="h-wallets">Followed wallets <small id="wallets-note"></small></h2>
+      <div id="wallets" class="table-wrap"></div>
+      <details class="dropped">
+        <summary>Dropped wallets <span id="dropped-count"></span></summary>
+        <div id="dropped" class="table-wrap scroll"></div>
+      </details>
+    </section>
+
+    <section class="panel" aria-labelledby="h-lat">
+      <h2 id="h-lat">Latency <small>last 7 days</small></h2>
+      <div id="latency"></div>
+    </section>
+
+    <section class="panel" aria-labelledby="h-learn">
+      <h2 id="h-learn">Learner</h2>
+      <div id="learner"></div>
+    </section>
+  </main>
+
+  <aside class="panel feed" aria-labelledby="h-feed">
+    <h2 id="h-feed">Live activity</h2>
+    <div id="filters" class="filters" role="tablist"></div>
+    <ol id="feed" class="feed-list"></ol>
+  </aside>
+</div>
+<div id="tip" class="tip" hidden></div>
+<!--STATE-->
+</body>
+</html>

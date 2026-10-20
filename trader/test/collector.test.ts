@@ -6,6 +6,7 @@ import { bondingCurve, canonicalPool } from "../src/collector/pools.js";
 import { encodeCreate, encodeMigration, encodeTrade, PUMP_PROGRAM, WSOL_MINT } from "../src/collector/pump-events.js";
 import type { CollectorConfig } from "../src/lib/config.js";
 import { openDb, type DB } from "../src/lib/db.js";
+import { setAlertSink } from "../src/lib/log.js";
 import { ReconnectingWs } from "../src/lib/reconnecting-ws.js";
 import { key, sampleTrade, testConfig } from "./helpers.js";
 
@@ -248,23 +249,51 @@ describe("Collector: targeted subscriptions", () => {
 });
 
 describe("Collector: Helius budget", () => {
-  it("turns the firehose off when its share of the daily budget is used, keeping targeted streams on", async () => {
-    const { db, c, fire, tgt } = await startCollector({ helius: { daily_mb_cap: 0.01, targeted_reserve_mb: 0.005 } });
+  it("light mode at 70%: firehose off, targeted streams stay on, the trader is told, one warning", async () => {
+    const alerts: Record<string, unknown>[] = [];
+    setAlertSink((_lvl, obj) => alerts.push(obj));
+    cleanups.push(() => setAlertSink(null));
+    const { db, c, fire, tgt } = await startCollector({ helius: { daily_mb_cap: 0.01, steps_pct: [70, 85, 95] } });
     await until(() => fire.received.length === 1 && tgt.connections === 1);
-    for (let i = 0; i < 4; i++) fire.push(notify(`big${i}`, 1, ["x".repeat(2_000)]));
+    for (let i = 0; i < 4; i++) fire.push(notify(`big${i}`, 1, ["x".repeat(1_900)])); // ~76% of 10 kB
     await until(() => c.streams.firehoseOff === "daily budget used", 8_000);
     expect(c.streams.targeted).toBe(true);
     expect(db.prepare("SELECT reason FROM collector_gaps WHERE source = 'firehose'").get()).toEqual({ reason: "daily budget used" });
+    expect(db.prepare("SELECT value FROM kv WHERE key = 'collector.data_mode'").get()).toEqual({ value: "light" });
+    expect(alerts).toMatchObject([{ alert: "helius_budget", pct: 70, mode: "light", capMb: 0.01 }]);
+    expect(db.prepare("SELECT value FROM kv WHERE key = 'collector.budget_warned'").get()).toMatchObject({ value: expect.stringMatching(/:70$/) });
   }, 10_000);
 
-  it("stops everything Helius at the hard cap", async () => {
-    const { db, c, fire, tgt } = await startCollector({ helius: { daily_mb_cap: 0.01, targeted_reserve_mb: 0.005 }, firehose: { enabled: false, hours_utc: [0, 24] } });
+  it("at the cap with nothing open: stops everything Helius until 00:00 UTC", async () => {
+    const { db, c, fire, tgt } = await startCollector({ helius: { daily_mb_cap: 0.01, steps_pct: [70, 85, 95] }, firehose: { enabled: false, hours_utc: [0, 24] } });
     await until(() => tgt.connections === 1);
     for (let i = 0; i < 6; i++) tgt.push(notify(`big${i}`, 1, ["x".repeat(2_000)]));
     await until(() => c.streams.targeted === null, 8_000);
     expect(db.prepare("SELECT reason FROM collector_gaps WHERE source = 'targeted'").get()).toEqual({ reason: "daily cap reached" });
+    expect(db.prepare("SELECT value FROM kv WHERE key = 'collector.data_mode'").get()).toEqual({ value: "off" });
     expect(fire.connections).toBe(0);
   }, 10_000);
+
+  it("never goes blind in an open trade: past the cap it keeps watching only the open position", async () => {
+    const db = openDb(":memory:");
+    const wallet = key(), held = key(), other = key();
+    const far = Date.now() + 3_600_000;
+    db.prepare("INSERT INTO tracked_wallets (wallet, added_at, active, source) VALUES (?, 0, 1, 'scoring')").run(wallet);
+    db.prepare("INSERT INTO signals (id, ts, wallet, mint, leader_trade_id, venue, decision, reasons, features) VALUES (1, 0, ?, 'M', 0, 'curve', 'enter', '[]', '{}')").run(wallet);
+    db.prepare("INSERT INTO paper_positions (signal_id, mint, leader_wallet, status, size_sol, leader_price, entry_due_at) VALUES (1, 'M', ?, 'open', 0.02, 1e-8, 0)").run(wallet);
+    db.prepare("INSERT INTO watchlist (address, kind, mint, until, priority, reason) VALUES (?, 'curve', 'M', ?, 1, 'paper position')").run(held, far);
+    db.prepare("INSERT INTO watchlist (address, kind, mint, until, priority, reason) VALUES (?, 'curve', 'N', ?, 2, 'tracked wallet trade')").run(other, far);
+    const { c, tgt } = await startCollector({ helius: { daily_mb_cap: 0.01, steps_pct: [70, 85, 95] }, firehose: { enabled: false, hours_utc: [0, 24] } }, { db });
+    await until(() => new Set(tgt.subs()).size === 3);
+    for (let i = 0; i < 6; i++) tgt.push(notify(`big${i}`, 1, ["x".repeat(2_000)])); // past 100%
+    await until(() => (db.prepare("SELECT value FROM kv WHERE key = 'collector.data_mode'").get() as { value: string } | undefined)?.value === "positions_only", 8_000);
+    await until(() => tgt.unsubs() === 2);
+    expect(c.streams.targeted).toBe(true);
+    expect(c.streams.targetedSubs).toBe(1); // only the open trade's curve
+    // the trade closes: now everything stops
+    db.prepare("UPDATE paper_positions SET status = 'closed'").run();
+    await until(() => c.streams.targeted === null, 8_000);
+  }, 20_000);
 
   it("keeps the firehose off outside its hours", async () => {
     const at16 = () => Date.UTC(2026, 9, 20, 16, 30);

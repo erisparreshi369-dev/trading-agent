@@ -1,7 +1,9 @@
+import { existsSync, statSync } from "node:fs";
 import type { Config } from "../lib/config.js";
 import { heartbeat, type DB } from "../lib/db.js";
 import { log } from "../lib/log.js";
 import { PaperEngine } from "../paper/engine.js";
+import { ShadowBook } from "../paper/shadow.js";
 import { RiskManager } from "../risk/risk-manager.js";
 import { SignalEngine, type LeaderTrade } from "../signals/engine.js";
 import type { TokenInfoSource } from "../signals/token-info.js";
@@ -18,6 +20,7 @@ export class Trader {
   readonly paper: PaperEngine;
   readonly risk: RiskManager;
   readonly signals: SignalEngine;
+  readonly shadow: ShadowBook;
   private cursor = 0;
   private tracked = new Set<string>();
   private queue: Promise<unknown> = Promise.resolve();
@@ -34,6 +37,8 @@ export class Trader {
     this.risk = new RiskManager(db, killFile, now);
     this.paper = new PaperEngine(db, cfg.paper, this.risk, now);
     this.signals = new SignalEngine(db, cfg.signals, info, this.paper, now);
+    this.shadow = new ShadowBook(db, cfg, now);
+    this.signals.setObserver(this.shadow);
   }
 
   start(): void {
@@ -42,10 +47,13 @@ export class Trader {
     // first start: begin at the head; never replay old history as if it were live
     this.cursor = saved ? Number(saved.value) : ((this.db.prepare("SELECT COALESCE(MAX(id), 0) m FROM trades").get() as { m: number }).m);
     this.loadTracked();
+    const backfilled = this.shadow.backfill();
+    if (backfilled) log.info({ signals: backfilled, variants: this.shadow.variants.length }, "shadow variants backfilled");
     this.timers.push(
       setInterval(() => this.safe(() => this.poll()), 200),
       setInterval(() => this.safe(() => this.paper.tick()), 250),
       setInterval(() => this.loadTracked(), 30_000),
+      setInterval(() => this.safe(() => this.shadow.settle()), 30_000),
       setInterval(() => this.beat(), 30_000),
     );
     this.beat();
@@ -124,6 +132,17 @@ export class Trader {
   }
 
   private beat(): void {
-    heartbeat(this.db, SERVICE, { ...this.stats, ...this.summary(), rss_mb: Math.round(process.memoryUsage().rss / 1e6) });
+    this.logDbSize();
+    heartbeat(this.db, SERVICE, { ...this.stats, ...this.summary(), shadow: this.shadow.stats, rss_mb: Math.round(process.memoryUsage().rss / 1e6) });
+  }
+
+  /** Latest database size per UTC day (db + wal): disk growth per day for reports. */
+  private logDbSize(): void {
+    const file = this.db.name;
+    if (!file || file === ":memory:") return;
+    const size = [file, `${file}-wal`].reduce((a, f) => a + (existsSync(f) ? statSync(f).size : 0), 0);
+    const now = this.now();
+    this.db.prepare(`INSERT INTO db_size_log (day, bytes, ts) VALUES (?, ?, ?)
+      ON CONFLICT(day) DO UPDATE SET bytes = excluded.bytes, ts = excluded.ts`).run(new Date(now).toISOString().slice(0, 10), size, now);
   }
 }

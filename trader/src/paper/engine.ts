@@ -4,7 +4,14 @@ import { log } from "../lib/log.js";
 import { bondingCurve, canonicalPool } from "../collector/pools.js";
 import { RISK } from "../risk/limits.js";
 import type { EntryDecision, RiskManager } from "../risk/risk-manager.js";
-import { simulateBuy, simulateSell, slippageBps, stateFromTrade, type CostModel, type MarketState, type TradeRowLike } from "../sim/market.js";
+import { maxSlippageBps } from "../lib/safe-settings.js";
+import { simulateBuy, simulateSell, slippageBps, stateFromTrade, type CostBreakdown, type CostModel, type MarketState, type TradeRowLike } from "../sim/market.js";
+
+/** A failed order still pays its network fee. */
+const priorityOnly = (sol: number): CostBreakdown => ({ platformSol: 0, executorSol: 0, prioritySol: sol, slippageSol: 0, rentSol: 0 });
+
+/** The collector's data modes in which it no longer watches the wallets we copy (see collector/budget.ts). */
+const NO_NEW_TRADES_MODES = ["positions_only", "off"];
 
 /** Trades reach SQLite ~0.3-1s after we'd have seen them; wait this long past a fill's due time. */
 export const INGEST_MARGIN_MS = 1_000;
@@ -100,9 +107,14 @@ export class PaperEngine {
     const { balance, start } = this.account();
     const live = this.live();
     if (live.some((p) => p.mint === leader.mint)) return { ok: false, reason: "already in this token" };
+    // the day's data budget is nearly gone: what's left is kept for watching the trades already open
+    const mode = this.db.prepare("SELECT value FROM kv WHERE key = 'collector.data_mode'").get() as { value: string } | undefined;
+    if (mode && NO_NEW_TRADES_MODES.includes(mode.value)) return { ok: false, reason: "data budget nearly used: no new trades until 00:00 UTC" };
     const dayStart = Date.parse(new Date(this.now()).toISOString().slice(0, 10));
     const entriesToday = (this.db.prepare("SELECT count(*) n FROM paper_positions WHERE entry_due_at >= ?").get(dayStart) as { n: number }).n;
-    const decision = this.risk.checkEntry({ equity: this.equity(), freeBalance: balance, startBalance: start, openPositions: live.length, entriesToday });
+    const leaderRecentEntries = (this.db.prepare(`SELECT count(*) n FROM (SELECT leader_wallet FROM paper_positions WHERE status != 'failed'
+      ORDER BY id DESC LIMIT ?) WHERE leader_wallet = ?`).get(RISK.WALLET_SHARE_WINDOW, leader.wallet) as { n: number }).n;
+    const decision = this.risk.checkEntry({ equity: this.equity(), freeBalance: balance, startBalance: start, openPositions: live.length, entriesToday, leaderRecentEntries });
     if (!decision.ok) return decision;
 
     const due = leader.received_at + this.cfg.execution_delay_ms;
@@ -176,15 +188,19 @@ export class PaperEngine {
     if (!buy) return this.failEntry(p, "size too small after fixed costs", this.cost.priorityFeeSol);
     const slip = slippageBps(buy.price, p.leader_price);
     const delay = this.cfg.execution_delay_ms;
-    if (slip > this.cfg.max_slippage_bps) {
-      this.recordFill(p.id, "buy", m.venue, false, this.cost.priorityFeeSol, null, buy.price, p.leader_price, slip, delay, this.cost.priorityFeeSol, `slippage ${slip.toFixed(0)}bps > limit`);
-      return this.failEntry(p, `slippage ${slip.toFixed(0)}bps over limit`, this.cost.priorityFeeSol, false);
+    const limit = maxSlippageBps(this.db, this.cfg);
+    if (slip > limit) {
+      // like a real order sent with a slippage limit: refused, the network fee is still paid
+      const reason = `skipped: price moved too much (slippage ${slip.toFixed(0)}bps > ${limit.toFixed(0)}bps limit)`;
+      this.recordFill(p.id, "buy", m.venue, false, this.cost.priorityFeeSol, null, buy.price, p.leader_price, slip, delay, this.cost.priorityFeeSol, reason, priorityOnly(this.cost.priorityFeeSol));
+      return this.failEntry(p, reason, this.cost.priorityFeeSol, false);
     }
     this.db.transaction(() => {
       this.db.prepare(`UPDATE paper_positions SET status = 'open', opened_at = ?, cost_sol = ?, tokens = ?, entry_price = ?,
         last_price = ?, last_price_at = ?, peak_price = ? WHERE id = ?`)
         .run(p.entry_due_at, p.size_sol, buy.tokens, buy.price, m.price, m.ts, m.price, p.id);
-      this.recordFill(p.id, "buy", m.venue, true, p.size_sol, buy.tokens, buy.price, p.leader_price, slip, delay, buy.feesSol + buy.rentSol, null);
+      this.recordFill(p.id, "buy", m.venue, true, p.size_sol, buy.tokens, buy.price, p.leader_price, slip, delay, buy.feesSol + buy.rentSol, null, buy.costs,
+        buy.curveSol * (1 - p.leader_price / m.price));
     }).immediate();
     const opened = this.get(p.id);
     log.info({ id: p.id, mint: p.mint, tokens: buy.tokens, price: buy.price, slipBps: Math.round(slip) }, "paper entry filled");
@@ -198,7 +214,7 @@ export class PaperEngine {
       this.db.prepare("UPDATE paper_account SET balance_sol = balance_sol + ? WHERE id = 1").run(p.size_sol - feePaid);
       this.db.prepare("UPDATE paper_positions SET status = 'failed', closed_at = ?, exit_reason = ?, pnl_sol = ? WHERE id = ?")
         .run(this.now(), reason, -feePaid, p.id);
-      if (record) this.recordFill(p.id, "buy", "curve", false, feePaid, null, null, p.leader_price, null, null, feePaid, reason);
+      if (record) this.recordFill(p.id, "buy", "curve", false, feePaid, null, null, p.leader_price, null, null, feePaid, reason, priorityOnly(feePaid));
     }).immediate();
     log.info({ id: p.id, mint: p.mint, reason }, "paper entry failed");
     this.emit({ type: "entry_failed", position: this.get(p.id), reason });
@@ -216,11 +232,17 @@ export class PaperEngine {
     const sell = simulateSell(m, p.tokens!, this.cost);
     const proceeds = sell.netSol + this.cost.tokenAccountRentSol; // account closed: rent comes back
     const pnl = proceeds - p.cost_sol!;
+    // slippage vs the price when we decided to sell (positive = we got less). Never blocks an exit.
+    const ref = this.marketAt(p.mint, p.exit_due_at! - this.cfg.execution_delay_ms)?.price ?? m.price;
+    const slip = slippageBps(ref, sell.price);
+    const limit = maxSlippageBps(this.db, this.cfg);
+    if (slip > limit) log.info({ id: p.id, mint: p.mint, slipBps: Math.round(slip), limitBps: limit }, "paper exit: price moved too much, sold anyway");
     this.db.transaction(() => {
       this.db.prepare("UPDATE paper_account SET balance_sol = balance_sol + ? WHERE id = 1").run(proceeds);
       this.db.prepare("UPDATE paper_positions SET status = 'closed', closed_at = ?, exit_reason = ?, proceeds_sol = ?, pnl_sol = ? WHERE id = ?")
         .run(p.exit_due_at, p.exit_trigger, proceeds, pnl, p.id);
-      this.recordFill(p.id, "sell", m.venue, true, proceeds, p.tokens, sell.price, m.price, slippageBps(m.price, sell.price), this.cfg.execution_delay_ms, sell.feesSol, p.exit_trigger);
+      this.recordFill(p.id, "sell", m.venue, true, proceeds, p.tokens, sell.price, ref, slip, this.cfg.execution_delay_ms, sell.feesSol, p.exit_trigger,
+        { ...sell.costs, rentSol: -this.cost.tokenAccountRentSol });
       this.db.prepare("UPDATE watchlist SET until = MIN(until, ?) WHERE mint = ? AND reason = 'paper position'").run(this.now() + 5 * 60_000, p.mint);
     }).immediate();
     const closed = this.get(p.id);
@@ -248,9 +270,11 @@ export class PaperEngine {
   }
 
   private recordFill(positionId: number, side: string, venue: string, ok: boolean, sol: number | null, tokens: number | null, price: number | null,
-    refPrice: number | null, slip: number | null, delay: number | null, fees: number | null, reason: string | null): void {
-    this.db.prepare(`INSERT INTO paper_fills (position_id, ts, side, venue, ok, sol, tokens, price, ref_price, slippage_bps, delay_ms, fees_sol, reason)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(positionId, this.now(), side, venue, ok ? 1 : 0, sol, tokens, price, refPrice, slip, delay, fees, reason);
+    refPrice: number | null, slip: number | null, delay: number | null, fees: number | null, reason: string | null, c: CostBreakdown, delaySol: number | null = null): void {
+    this.db.prepare(`INSERT INTO paper_fills (position_id, ts, side, venue, ok, sol, tokens, price, ref_price, slippage_bps, delay_ms, fees_sol, reason,
+      platform_fee_sol, executor_fee_sol, priority_fee_sol, slippage_sol, rent_sol, delay_sol) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      .run(positionId, this.now(), side, venue, ok ? 1 : 0, sol, tokens, price, refPrice, slip, delay, fees, reason,
+        c.platformSol, c.executorSol, c.prioritySol, c.slippageSol, c.rentSol, delaySol);
   }
 
   private get(id: number): Position {

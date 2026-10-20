@@ -3,4 +3,5 @@ Description=trading-agent failure alert for %i
 
 [Service]
 Type=oneshot
+Environment=NODE=@NODE@
 ExecStart=@ROOT@/scripts/notify-failure.sh %i

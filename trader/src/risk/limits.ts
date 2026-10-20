@@ -14,6 +14,10 @@ export const RISK = Object.freeze({
   MIN_POSITION_SOL: 0.01,
   MAX_OPEN_POSITIONS: 5,
   MAX_ENTRIES_PER_DAY: 40,
+  /** No leader may account for more than this share of our entries... */
+  MAX_WALLET_SHARE: 0.25,
+  /** ...counted over our last this-many entries (so at most 5 of the last 20, also while there are fewer). */
+  WALLET_SHARE_WINDOW: 20,
   /** Exit when price is this far below our entry price. */
   STOP_LOSS_PCT: 0.25,
   /** Exit any position held this long. */
