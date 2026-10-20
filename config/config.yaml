@@ -27,7 +27,7 @@ collector:
     # tokens we hold, PumpSwap pools of migrated tokens we care about.
     enabled: true
     token_watch_minutes: 60     # keep watching a token's curve this long after a tracked wallet trades it
-    pool_watch_hours: 48        # after migration
+    pool_watch_hours: 2         # after migration (was 48: watching hot pools was the biggest Helius data user; we only buy before migration)
     max_subscriptions: 900      # Helius Free allows 1000 per connection
 
   # Free PumpPortal streams: every new token (with creator + dev buy) and every migration.
