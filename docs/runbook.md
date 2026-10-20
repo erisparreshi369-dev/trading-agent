@@ -1,6 +1,6 @@
 # Runbook
 
-Grows each phase. Systemd units, Telegram alerts and the VPS deploy script arrive in Phase 3.
+Grows each phase.
 
 ## Is it healthy?
 
@@ -9,6 +9,25 @@ make status
 ```
 
 Exit code 0 = every service has a fresh heartbeat and a live process; 2 = something is stale or stopped.
+
+## Services
+
+```bash
+systemctl --user status trading-collector trading-trader trading-notifier
+systemctl --user restart trading-trader          # safe at any time: state is in SQLite
+make logs S=collector
+systemctl --user list-timers 'trading-*'
+```
+
+| Telegram alert | meaning / what to do |
+|---|---|
+| `X has not reported for 5 min` | hung or stopped. `systemctl --user status trading-X`, `make logs S=X` |
+| `X restarted after dying without a clean shutdown` | killed / out of memory / power loss; systemd already restarted it. Several per day: check `make logs`, `free -h`, `dmesg` |
+| `systemd: trading-X FAILED ... not restarted` | crash loop (20 in 10 min) or a timer job failed. Fix the cause, then `systemctl --user reset-failed trading-X && systemctl --user start trading-X` |
+| `Helius daily cap reached: ... following is OFF` | see Collector below |
+| no messages at all | `systemctl --user status trading-notifier`; token/chat in `.env`; `cd trader && npm run telegram:setup` re-detects the chat |
+
+After a reboot everything starts by itself (linger). `make drill` re-verifies recovery end to end.
 
 ## Collector
 

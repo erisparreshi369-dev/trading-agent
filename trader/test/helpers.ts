@@ -22,6 +22,7 @@ export function testConfig(over: { [K in keyof Config]?: Partial<Config[K]> } = 
     scoring: { ...c.scoring, ...over.scoring },
     signals: { ...c.signals, ...over.signals },
     paper: { ...c.paper, ...over.paper },
+    notifier: { ...c.notifier, ...over.notifier },
   };
 }
 

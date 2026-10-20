@@ -13,7 +13,8 @@ ROOT = Path(__file__).resolve().parent.parent
 DB = Path(os.environ.get("DB_PATH", ROOT / "data/trading.db"))
 if not DB.is_absolute():
     DB = ROOT / DB
-SERVICES = ["collector", "trader"]  # learner joins in Phase 4
+SERVICES = ["collector", "trader", "notifier"]
+TIMERS = ["score", "weekly", "logrotate"]
 STALE_S = 300
 
 G, R, Y, D, B = "\033[32m", "\033[31m", "\033[33m", "\033[2m", "\033[1m"
@@ -50,6 +51,25 @@ def systemd_state(name: str) -> str:
         return "unknown"
 
 
+def check() -> int:
+    """--check: one line, exit 0 healthy / 2 unhealthy. For cron, scripts and the VPS."""
+    if not DB.exists():
+        print("UNHEALTHY no database")
+        return 2
+    c = sqlite3.connect(f"file:{DB}?mode=ro", uri=True, timeout=10)
+    now = time.time() * 1000
+    bad = []
+    for svc in SERVICES:
+        row = c.execute("SELECT ts, pid FROM service_heartbeats WHERE service=?", (svc,)).fetchone()
+        if not row or now - row[0] > STALE_S * 1000 or not pid_running(row[1]):
+            bad.append(svc)
+    last = c.execute("SELECT max(received_at) FROM trades").fetchone()[0]
+    if not last or now - last > 15 * 60_000:
+        bad.append("no trades for 15 min")
+    print("OK" if not bad else "UNHEALTHY " + ", ".join(bad))
+    return 0 if not bad else 2
+
+
 def main() -> int:
     if not DB.exists():
         print(f"{R}no database at {DB}{X} (has the collector ever run?)")
@@ -83,6 +103,18 @@ def main() -> int:
         elif svc == "trader":
             flags = (f" {R}KILL SWITCH ON{X}" if i.get("killed") else "") + (f" {Y}halted today (daily loss cap){X}" if i.get("haltedToday") else "")
             print(f"  {D}{'':<10} mode={i.get('mode')} tracked={i.get('tracked')} signals={i.get('signals', 0)} entered={i.get('entered', 0)} errors={i.get('errors', 0)}{X}{flags}")
+
+    timers = []
+    for t in TIMERS:
+        try:
+            out = subprocess.run(["systemctl", "--user", "show", f"trading-{t}.timer", "-p", "NextElapseUSecRealtime", "-p", "LastTriggerUSec", "--value"],
+                                 capture_output=True, text=True, timeout=5).stdout.split("\n")
+            if out and out[0].strip():
+                timers.append(f"{t} next {out[0].strip()[4:20]}")
+        except Exception:
+            pass
+    if timers:
+        print(f"  {D}timers: {' · '.join(timers)}{X}")
 
     print(f"\n{B}data{X}")
     day = time.strftime("%Y-%m-%d", time.gmtime())
@@ -143,4 +175,4 @@ def has_table(c, name: str) -> bool:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(check() if "--check" in sys.argv else main())

@@ -1,0 +1,11 @@
+[Unit]
+Description=trading-agent log rotation
+OnFailure=trading-failure@%N.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=@ROOT@
+ExecStart=/usr/sbin/logrotate --state @ROOT@/logs/.logrotate.state @ROOT@/logs/.logrotate.conf
+StandardOutput=append:@ROOT@/logs/logrotate.log
+StandardError=append:@ROOT@/logs/logrotate.log
+TimeoutStartSec=2h

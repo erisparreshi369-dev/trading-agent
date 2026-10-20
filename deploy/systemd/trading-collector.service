@@ -1,0 +1,21 @@
+[Unit]
+Description=trading-agent data collector (Helius + PumpPortal streams)
+
+# give up (and fire OnFailure) only if it can't stay up: 20 crashes in 10 minutes
+StartLimitIntervalSec=600
+StartLimitBurst=20
+OnFailure=trading-failure@%N.service
+
+[Service]
+Type=simple
+WorkingDirectory=@ROOT@/trader
+ExecStart=@NODE@ dist/collector/index.js
+Restart=always
+RestartSec=5
+TimeoutStopSec=20
+StandardOutput=append:@ROOT@/logs/collector.log
+StandardError=append:@ROOT@/logs/collector.log
+MemoryMax=1500M
+
+[Install]
+WantedBy=default.target

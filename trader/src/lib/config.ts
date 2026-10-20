@@ -98,8 +98,17 @@ const PaperSchema = z
   })
   .strict();
 
+const NotifierSchema = z
+  .object({
+    watch_services: z.array(z.string()).min(1),
+    stale_after_s: z.number().positive(),
+    daily_summary_utc: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
+    trade_alerts: z.boolean(),
+  })
+  .strict();
+
 export const ConfigSchema = z
-  .object({ collector: CollectorSchema, scoring: ScoringSchema, signals: SignalsSchema, paper: PaperSchema })
+  .object({ collector: CollectorSchema, scoring: ScoringSchema, signals: SignalsSchema, paper: PaperSchema, notifier: NotifierSchema })
   .strict();
 
 export type Config = z.infer<typeof ConfigSchema>;
@@ -107,6 +116,7 @@ export type CollectorConfig = z.infer<typeof CollectorSchema>;
 export type ScoringConfig = z.infer<typeof ScoringSchema>;
 export type SignalsConfig = z.infer<typeof SignalsSchema>;
 export type PaperConfig = z.infer<typeof PaperSchema>;
+export type NotifierConfig = z.infer<typeof NotifierSchema>;
 
 export function loadConfig(path = resolve(ROOT, "config/config.yaml")): Config {
   return ConfigSchema.parse(YAML.parse(readFileSync(path, "utf8")));
@@ -119,6 +129,8 @@ export const env = {
   heliusApiKey: () => process.env.HELIUS_API_KEY?.trim() || undefined,
   // Exact string match: anything other than "true" means paper mode.
   liveTrading: process.env.LIVE_TRADING === "true",
+  telegramToken: () => process.env.TELEGRAM_BOT_TOKEN?.trim() || undefined,
+  telegramChatId: () => process.env.TELEGRAM_CHAT_ID?.trim() || undefined,
 };
 
 export function heliusRpcUrl(): string | undefined {

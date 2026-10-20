@@ -87,3 +87,9 @@ paper:
   max_slippage_bps: 1500        # worse than this vs the leader's price = order fails, like a live slippage limit
   token_account_rent_sol: 0.00203928  # paid on first buy, refunded when the account is closed on exit
   follow_leader_exit: true      # sell when the leader sells
+
+notifier:
+  watch_services: [collector, trader]  # alert if one of these stops reporting
+  stale_after_s: 300
+  daily_summary_utc: "00:05"          # summary of the previous UTC day
+  trade_alerts: true                  # a message for every paper buy/sell/missed fill

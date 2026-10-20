@@ -1,0 +1,11 @@
+[Unit]
+Description=trading-agent daily wallet re-scoring
+OnFailure=trading-failure@%N.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=@ROOT@/trader
+ExecStart=@NODE@ dist/scoring/index.js
+StandardOutput=append:@ROOT@/logs/score.log
+StandardError=append:@ROOT@/logs/score.log
+TimeoutStartSec=2h

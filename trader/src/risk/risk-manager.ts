@@ -58,7 +58,7 @@ export class RiskManager {
     }
     if (st.halted_day !== today && st.day_start_equity !== null && a.equity < st.day_start_equity * (1 - RISK.DAILY_LOSS_CAP_PCT)) {
       this.db.prepare("UPDATE risk_state SET halted_day = ? WHERE id = 1").run(today);
-      log.warn({ equity: a.equity, dayStart: st.day_start_equity }, "daily loss cap hit: no new entries until 00:00 UTC");
+      log.warn({ alert: true, equity: a.equity, dayStart: st.day_start_equity }, "daily loss cap hit: no new entries until 00:00 UTC");
     }
   }
 

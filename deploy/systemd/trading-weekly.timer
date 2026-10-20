@@ -1,0 +1,11 @@
+[Unit]
+Description=trading-agent weekly report (+ model retraining from Phase 4) schedule
+
+[Timer]
+OnCalendar=Sun *-*-* 01:00:00 UTC
+# run on next boot if the machine was off at the scheduled time
+Persistent=true
+RandomizedDelaySec=60
+
+[Install]
+WantedBy=timers.target

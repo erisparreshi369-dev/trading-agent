@@ -7,9 +7,9 @@ in **paper mode**. Live trading is off unless the owner sets `LIVE_TRADING=true`
 | Phase | Scope | State |
 |---|---|---|
 | 1 | Project setup, SQLite schema, data collector | done |
-| 2 | PumpSwap trades, Helius budget + targeted streams, wallet scoring, signal engine, paper trader, risk manager | **done** |
-| 3 | Telegram bot, systemd services, heartbeat watchdog, health checks, timers, deploy script | next |
-| 4 | Learner: datasets, model, walk-forward backtest, weekly retrain + report | |
+| 2 | PumpSwap trades, Helius budget + targeted streams, wallet scoring, signal engine, paper trader, risk manager | done |
+| 3 | Telegram bot, systemd services, heartbeat watchdog, health checks, timers, deploy script | **done** |
+| 4 | Learner: datasets, model, walk-forward backtest, weekly retrain + report | next |
 | 5 | Live executor (still disabled by default) | |
 
 ## Architecture
@@ -87,7 +87,7 @@ enforce all of this):
 | daily loss cap | −5% equity from UTC day start → no entries until next day |
 | max drawdown | −30% from starting balance → kill switch (needs a human to clear) |
 | free balance reserve | 0.05 SOL |
-| kill switch | `make kill`, `touch data/KILL`, or (Phase 3) Telegram `/stop` → flatten all, no entries |
+| kill switch | `make kill`, `touch data/KILL`, or Telegram `/stop` → flatten all, no entries. Clearing it: `make unkill` on the machine only |
 
 **Paper engine.** Orders fill at the market state `execution_delay_ms` after the leader's trade
 (constant-product on the real reserves, so price impact included), plus: pump fees as charged on
@@ -98,6 +98,36 @@ stop loss, the time exit, or the kill switch, with the same delay.
 
 What this means at a 1 SOL balance: positions are 0.02 SOL and a round trip costs ~6–7% before
 any price movement. The stop loss realises worse than −25% (prices move during the 1.5s exit).
+
+## Operations (Phase 3)
+
+Everything runs as **systemd user services** (`~/.config/systemd/user/trading-*`), started at boot
+without a login (linger), restarted 5s after any crash, logs in `logs/*.log` rotated daily
+(14 days, 100 MB cap) by a user timer.
+
+| unit | what | when |
+|---|---|---|
+| `trading-collector` | streams → SQLite | always |
+| `trading-trader` | signals, risk, paper engine | always |
+| `trading-notifier` | Telegram: trades, errors, watchdog, daily summary, reports, commands | always |
+| `trading-score.timer` | wallet re-scoring | daily 00:15 UTC |
+| `trading-weekly.timer` | weekly report → Telegram (model retraining joins in Phase 4) | Sundays 01:00 UTC |
+| `trading-logrotate.timer` | log rotation | daily 03:30 UTC |
+
+**Alerts** (Telegram, from @ser1sbot): every paper buy/sell/missed fill; every error any service
+logs (secrets scrubbed); a service that hasn't reported for 5 minutes (and when it's back); a
+service that died without a clean shutdown (kill, OOM, power loss) with a per-day count; a unit
+systemd gave up on (crash loop) or a failed timer job, sent by `curl` so it works even when the
+notifier is down; daily summary 00:05 UTC; weekly report as a file.
+**Commands**: `/status`, `/pnl`, `/stop` (kill switch), accepted only from the owner's chat.
+
+**Host**: sleep/suspend/hibernate masked, lid close and idle ignored (logind drop-in + XFCE power
+settings), done by `sudo bash scripts/setup-host.sh` (undo: `--undo`).
+
+**Moving to a VPS**: `make deploy TARGET=user@host ARGS="--with-env --with-data"` copies the code
+(and optionally `.env` and a consistent DB snapshot, after stopping the local services), installs
+Node/Python on the server, runs the tests, installs the services. Then `make uninstall-services`
+here: never run both.
 
 ## Layout
 
@@ -110,7 +140,11 @@ trader/src/signals   filters + on-chain checks
 trader/src/risk      HARD limits + risk manager
 trader/src/paper     paper engine
 trader/src/trader    trading loop service
-trader/src/tools     verify-live, explain-wallet, kill switch
+trader/src/notifier  Telegram client, alerts, watchdog, commands
+trader/src/tools     verify-live, explain-wallet, kill switch, telegram-setup
+learner/             weekly report (Phase 4: model training + backtest)
+deploy/              systemd unit templates, logrotate config
+scripts/             status, install-services, setup-host (sudo), deploy, drill
 config/config.yaml   tunables — no secrets, no risk limits
 scripts/status.py    `make status`
 ```
@@ -122,11 +156,13 @@ Requires Node 20+ and Python 3.11+.
 ```bash
 make install        # npm deps, .venv, .env (chmod 600) from .env.example
 $EDITOR .env        # HELIUS_API_KEY
-make test           # 74 tests
-make collector      # terminal 1
-make trader         # terminal 2 (paper only)
-make score          # after some data has been collected; re-run daily (timer in Phase 3)
-make status         # health, data, paper PnL
+make test                 # 84 tests
+make install-services     # build, install + start everything under systemd
+make status               # health, streams, timers, data, paper PnL
+make health               # one line + exit code, for scripts
+make logs S=trader        # follow a service's log (collector|trader|notifier|score|weekly)
+make drill                # restart + kill -9 every service, verify recovery and alerts
+make score / make weekly  # run the scheduled jobs now
 make explain WALLET=<address>   # why a wallet scores the way it does
 make kill / make unkill
 make verify-live    # after any pump.fun program upgrade

@@ -1,0 +1,6 @@
+[Unit]
+Description=trading-agent failure alert for %i
+
+[Service]
+Type=oneshot
+ExecStart=@ROOT@/scripts/notify-failure.sh %i

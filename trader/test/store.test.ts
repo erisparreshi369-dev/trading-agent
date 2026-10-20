@@ -1,11 +1,13 @@
 import { execFileSync } from "node:child_process";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { ROOT } from "../src/lib/config.js";
 import { migrate, openDb } from "../src/lib/db.js";
 import { Store, type TradeRow } from "../src/collector/store.js";
+
+const MIGRATIONS = readdirSync(resolve(ROOT, "shared/migrations")).filter((f) => f.endsWith(".sql")).sort();
 
 function row(over: Partial<TradeRow> = {}): TradeRow {
   return {
@@ -20,7 +22,7 @@ describe("migrations", () => {
   it("are idempotent", () => {
     const db = openDb(":memory:");
     expect(migrate(db)).toEqual([]);
-    expect(db.prepare("SELECT name FROM schema_migrations ORDER BY name").all()).toEqual([{ name: "001_init.sql" }, { name: "002_trading.sql" }]);
+    expect(db.prepare("SELECT name FROM schema_migrations ORDER BY name").all()).toEqual(MIGRATIONS.map((name) => ({ name })));
   });
 
   it("python and TS runners agree on the same database", () => {
@@ -28,7 +30,7 @@ describe("migrations", () => {
     const path = join(dir, "t.db");
     const py = resolve(ROOT, ".venv/bin/python");
     const out = execFileSync(py, [resolve(ROOT, "shared/migrate.py"), path], { encoding: "utf8" });
-    expect(out).toMatch(/applied: \['001_init.sql', '002_trading.sql'\]/);
+    expect(out.trim()).toBe(`applied: [${MIGRATIONS.map((m) => `'${m}'`).join(", ")}]`);
     const db = openDb(path); // TS runner sees nothing left to do
     expect(migrate(db)).toEqual([]);
     expect(db.prepare("SELECT count(*) n FROM sqlite_master WHERE name IN ('trades', 'paper_positions', 'watchlist')").get()).toEqual({ n: 3 });

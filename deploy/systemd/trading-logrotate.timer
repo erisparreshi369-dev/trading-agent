@@ -1,0 +1,11 @@
+[Unit]
+Description=trading-agent log rotation schedule
+
+[Timer]
+OnCalendar=*-*-* 03:30:00 UTC
+# run on next boot if the machine was off at the scheduled time
+Persistent=true
+RandomizedDelaySec=60
+
+[Install]
+WantedBy=timers.target
