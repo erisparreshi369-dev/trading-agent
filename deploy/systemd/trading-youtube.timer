@@ -1,0 +1,12 @@
+[Unit]
+Description=trading-agent YouTube study schedule
+
+[Timer]
+# before the 00:40 brain study; slow on purpose (YouTube blocks fast downloads)
+OnCalendar=*-*-* 00:20:00 UTC
+# run on next boot if the machine was off at the scheduled time
+Persistent=true
+RandomizedDelaySec=60
+
+[Install]
+WantedBy=timers.target

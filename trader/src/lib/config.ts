@@ -219,6 +219,9 @@ export const ConfigSchema = z
   .object({
     collector: CollectorSchema, scoring: ScoringSchema, signals: SignalsSchema, paper: PaperSchema, shadow: ShadowSchema, notifier: NotifierSchema,
     providers: ProvidersSchema, madeonsol: MadeOnSolSchema, brain: BrainSchema,
+    // Read only by learner/youtube.py (the brain's nightly YouTube study); nothing in the trader uses it,
+    // so only its on/off switch is checked here and new keys there can't stop the bot from starting.
+    youtube: z.object({ enabled: z.boolean() }).passthrough().optional(),
   })
   .strict();
 

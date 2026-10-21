@@ -212,3 +212,33 @@ brain:
   lesson_min_n: 15          # a lesson needs this many signals on each side
   lesson_min_diff: 0.02     # ...and a difference of at least 2 points to count as "better" or "worse"
   own_skips_min: 10         # once it really skipped this many signals, they must have lost money on average, or it fails the exam
+
+youtube:
+  # The brain studies YouTube (learner/youtube.py, nightly 00:20 UTC, or `make youtube`): talks and
+  # interviews of well-known traders, subtitles only (free, no key, no AI). It counts which trading
+  # rules they talk about and checks each against our own shadow results. Videos never change what
+  # the bot does. YouTube blocks fast downloads, so it goes slowly and carries on the next night.
+  enabled: true
+  per_search: 5              # results looked at per search
+  max_videos: 15             # new videos per night at most
+  sleep_s: 8                 # pause between downloads
+  max_duration_min: 240      # skip longer videos (livestreams)
+  min_n: 30                  # trades our data needs before it judges a rule
+  min_diff: 0.02             # ...and a difference of at least 2 points of follower ROI
+  traders:                   # searched as "<name> trading interview", one turn each, rotating nightly
+    - Paul Tudor Jones
+    - Stanley Druckenmiller
+    - Mark Minervini
+    - Peter Brandt
+    - Linda Raschke
+    - Ed Seykota
+    - Jesse Livermore
+    - William O'Neil
+    - Jack Schwager Market Wizards
+    - Chat With Traders
+    - SMB Capital
+    - Kristjan Kullamagi
+  topics:                    # plain searches, a smaller part of the mix
+    - professional trader risk management
+    - crypto trader interview strategy
+    - solana memecoin trading strategy

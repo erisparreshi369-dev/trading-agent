@@ -7,6 +7,7 @@ install: ## install all dependencies
 	cd trader && npm ci
 	test -d .venv || python3 -m venv .venv
 	$(PY) -m pip install -q --upgrade pip
+	$(PY) -m pip install -q -r learner/requirements.txt
 	@test -f .env || (cp .env.example .env && chmod 600 .env && echo "created .env from .env.example; fill in keys")
 
 build:
