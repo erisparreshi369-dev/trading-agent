@@ -7,7 +7,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 UNIT_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
 NODE="$(command -v node)"
 SERVICES=(collector trader notifier dashboard brain)
-TIMERS=(score weekly logrotate intel youtube)
+TIMERS=(score weekly logrotate intel youtube backup)
 RETIRED=(trading-brain.timer) # the brain studied nightly before it learned after every trade
 
 if [ "${1:-}" = "--uninstall" ]; then
