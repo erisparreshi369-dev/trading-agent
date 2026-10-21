@@ -139,7 +139,6 @@ without a login (linger), restarted 5s after any crash, logs in `logs/*.log` rot
 | `trading-collector` | streams → SQLite | always |
 | `trading-trader` | signals, risk, paper engine | always |
 | `trading-notifier` | Telegram: trades, errors, watchdog, daily summary, reports, commands | always |
-| `trading-dashboard` | read-only live web dashboard, http://localhost:8080 | always |
 | `trading-intel.timer` | optional MadeOnSol job: creator records, early-buyer scores, candidate wallets | daily 00:02 UTC |
 | `trading-score.timer` | wallet re-scoring | daily 00:15 UTC |
 | `trading-weekly.timer` | weekly report → Telegram (model retraining joins in Phase 4) | Sundays 01:00 UTC |
@@ -192,7 +191,9 @@ guard keeps any 31 days under 90% of the plan's monthly credits. One
 poller thread reads SQLite every second and pushes to browsers over Server-Sent Events. Risk limits
 are parsed from `limits.ts` (plus the owner's changes), paper costs from `config.yaml`, so it shows
 what the trader enforces.
-On a VPS: `ssh -L 8080:localhost:8080 user@host`, then open http://localhost:8080.
+It runs only inside the desktop app (`dashboard/app.py`, `make app`): opening the window starts the server
+on a free port of this machine, closing it stops the server. For a browser, `make dashboard` runs one in the
+foreground on :8080 (on a VPS: `ssh -L 8080:localhost:8080 user@host`, then open http://localhost:8080).
 The Phase 4 learner should write `models/current.json`
 (`{"version", "trained_at" (ms), "metrics": {...}, "top_features": [[name, importance], ...]}`);
 the learner panel shows it, plus the newest `reports/weekly-*.md`.
@@ -237,7 +238,7 @@ $EDITOR .env        # HELIUS_API_KEY
 make test                 # 84 tests
 make install-services     # build, install + start everything under systemd
 make status               # health, streams, timers, data, paper PnL, dashboard URL
-open http://localhost:8080  # live dashboard (make dashboard PORT=8090 runs a foreground copy)
+make app                  # live dashboard in its own window (runs only while the window is open)
 make health               # one line + exit code, for scripts
 make logs S=trader        # follow a service's log (collector|trader|notifier|score|weekly)
 make drill                # restart + kill -9 every service, verify recovery and alerts

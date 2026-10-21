@@ -6,9 +6,10 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 UNIT_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
 NODE="$(command -v node)"
-SERVICES=(collector trader notifier dashboard brain)
+SERVICES=(collector trader notifier brain)
 TIMERS=(score weekly logrotate intel youtube backup)
-RETIRED=(trading-brain.timer) # the brain studied nightly before it learned after every trade
+# the brain studied nightly before it learned after every trade; the dashboard runs only inside the desktop app since 2026-10-21
+RETIRED=(trading-brain.timer trading-dashboard.service)
 
 if [ "${1:-}" = "--uninstall" ]; then
   systemctl --user disable --now $(printf 'trading-%s.service ' "${SERVICES[@]}") $(printf 'trading-%s.timer ' "${TIMERS[@]}") "${RETIRED[@]}" 2>/dev/null || true

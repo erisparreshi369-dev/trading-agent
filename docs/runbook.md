@@ -9,14 +9,14 @@ make status
 ```
 
 Exit code 0 = every service has a fresh heartbeat and a live process; 2 = something is stale or stopped.
-Or open the dashboard, http://localhost:8080: the header turns red/yellow when a service, the kill
-switch, the daily cap or the data feed needs attention. If the page says it can't read the bot's
-data, check `make logs S=dashboard`; the dashboard being down never affects trading.
+Or open the dashboard app ("Trading Dashboard", or `make app`): the header turns red/yellow when a service, the kill
+switch, the daily cap or the data feed needs attention. If it says it can't read the bot's
+data or didn't start, check `logs/dashboard.log`; the dashboard being closed never affects trading.
 
 ## Services
 
 ```bash
-systemctl --user status trading-collector trading-trader trading-notifier trading-dashboard
+systemctl --user status trading-collector trading-trader trading-notifier trading-brain
 systemctl --user restart trading-trader          # safe at any time: state is in SQLite
 make logs S=collector
 systemctl --user list-timers 'trading-*'

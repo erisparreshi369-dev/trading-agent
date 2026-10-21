@@ -31,11 +31,11 @@ trader: build
 notifier: build
 	cd trader && node dist/notifier/index.js | npx pino-pretty
 
-dashboard: ## run the read-only dashboard in the foreground (systemd runs it as trading-dashboard on :8080)
+dashboard: ## run the dashboard server in the foreground, for a browser (normally only the app runs it, while its window is open)
 	$(PY) dashboard/server.py --port $(or $(PORT),8080)
 
-app: ## open the dashboard in its own window (not a browser tab)
-	/usr/bin/python3 dashboard/app.py --port $(or $(PORT),8080) &
+app: ## open the dashboard in its own window; it runs while the window is open and stops when you close it
+	/usr/bin/python3 dashboard/app.py &
 
 install-app: ## add "Trading Dashboard" to the app menu and the desktop
 	bash scripts/install-app.sh

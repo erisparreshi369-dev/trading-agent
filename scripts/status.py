@@ -138,8 +138,7 @@ def main() -> int:
             print(f"  {D}{'':<10} studies since start={i.get('studies', 0)}  last study {ago(last.get('at'))}: {last.get('studied', 0)} signals, "
                   f"{'ACTIVE (may skip predicted losers)' if last.get('active') else 'studying only'}{X}")
 
-    dash = systemd_state("dashboard")
-    print(f"  {'dashboard':<10} {G + 'up' + X if dash == 'active' else R + dash + X}  {B}http://localhost:8080{X}  {D}(read-only, live){X}")
+    print(f"  {'dashboard':<10} {D}desktop app only: open \"Trading Dashboard\" (or make app); it stops when you close the window{X}")
 
     timers = []
     for t in TIMERS:
