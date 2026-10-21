@@ -20,7 +20,7 @@ import settings
 
 ROOT = Path(__file__).resolve().parent.parent
 SERVICES = ["collector", "trader", "notifier"]
-LEARNER_UNITS = {"weekly": "weekly report", "score": "wallet re-scoring", "brain": "learning brain study"}
+LEARNER_UNITS = {"weekly": "weekly report", "score": "wallet re-scoring", "brain": "learning brain study", "youtube": "YouTube study"}
 ALWAYS_ON = {"brain"}  # learner units that run all the time (the brain studies after every trade), not on a timer
 STALE_HEARTBEAT_MS = 5 * 60_000
 QUIET_MS = 5 * 60_000
@@ -513,7 +513,20 @@ class Snapshot:
         brain = self.brain()
         if brain and brain.get("model"):
             model = brain.pop("model")  # the learning brain's newest model (models/current.json was the pre-brain placeholder)
-        return {"model": model, "report": report, "scoring": scoring, "scoring_at": scoring_hb["ts"] if scoring_hb else None, "brain": brain}
+        return {"model": model, "report": report, "scoring": scoring, "scoring_at": scoring_hb["ts"] if scoring_hb else None, "brain": brain,
+                "youtube": self.youtube()}
+
+    def youtube(self) -> dict | None:
+        """What top traders teach on YouTube (learner/youtube.py) and what our own data says about each rule."""
+        if not self.has("yt_rules"):
+            return None
+        rules = [{**dict(r), "traders": json.loads(r["traders"] or "[]"), "data": json.loads(r["data"] or "{}")}
+                 for r in self.q("SELECT key, words, videos, mentions, traders, first_heard, last_heard, verdict, test, data, checked_at FROM yt_rules")]
+        rules.sort(key=lambda r: (-r["videos"], -r["mentions"]))
+        return {"rules": rules, "checked_at": max((r["checked_at"] for r in rules), default=None),
+                "studied": self.one("SELECT count(*) FROM yt_videos WHERE status = 'ok'"),
+                "looked_at": self.one("SELECT count(*) FROM yt_videos"),
+                "last_video_at": self.one("SELECT max(found_at) FROM yt_videos")}
 
     def brain(self) -> dict | None:
         """The learning brain: newest model and exam, its latest lessons, and how much it remembers."""

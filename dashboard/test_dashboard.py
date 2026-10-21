@@ -124,6 +124,22 @@ class DashboardData(unittest.TestCase):
         self.assertEqual(m["last_error_at"], NOW - 30_000)
         self.assertEqual(m["last_error"], "me: http 500 msk_***")
 
+    def test_youtube_verdicts(self):
+        self.assertEqual(data.Snapshot(self.c, self.path).build({}, NOW)["learner"]["youtube"]["rules"], [])  # nothing studied yet
+        w = connect(str(self.path))
+        w.execute("INSERT INTO yt_videos (id, search, trader, found_at, status, words) VALUES ('v1', 'x', 'Peter Brandt', ?, 'ok', 900)", (NOW - 60_000,))
+        w.execute("INSERT INTO yt_videos (id, search, found_at, status) VALUES ('v2', 'y', ?, 'no_subs')", (NOW - 30_000,))
+        for key, videos, verdict, d in (("liquidity", 1, "not_enough_data", {"n": 4}), ("cut_losses", 3, "agrees", {"n": 40, "diff": 0.031}),
+                                        ("trend", 0, "untested", {})):
+            w.execute("""INSERT INTO yt_rules (key, words, videos, mentions, traders, verdict, test, data, checked_at)
+                         VALUES (?, ?, ?, ?, '["Peter Brandt"]', ?, 'how', ?, ?)""", (key, key, videos, videos * 2, verdict, json.dumps(d), NOW - 1_000))
+        w.close()
+        y = data.Snapshot(self.c, self.path).build({}, NOW)["learner"]["youtube"]
+        self.assertEqual([r["key"] for r in y["rules"]], ["cut_losses", "liquidity", "trend"])  # most-heard first
+        self.assertEqual(y["rules"][0]["data"]["diff"], 0.031)
+        self.assertEqual(y["rules"][0]["traders"], ["Peter Brandt"])
+        self.assertEqual((y["studied"], y["looked_at"], y["checked_at"]), (1, 2, NOW - 1_000))
+
     def test_feed_seed_and_poll(self):
         f = data.Feed(self.c)
         f.seed()

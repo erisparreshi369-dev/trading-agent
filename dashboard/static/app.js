@@ -694,6 +694,33 @@ function renderBrain(b) {
     ${exam}<!--split-->${memory}`;
 }
 
+// what top traders teach on YouTube, and whether our own trades agree (learner/youtube.py; videos never change trades)
+function renderYoutube(y) {
+  if (!y) return "";
+  const head = `<h3>${g("What top traders teach", "what the pros say")} <span class="muted">${g("from YouTube, checked against our own trades · never changes a trade", "from YouTube, fact-checked on our trades · never changes a trade")}</span></h3>`;
+  const heard = y.rules.filter((r) => r.videos > 0);
+  if (!heard.length) {
+    return head + `<div class="empty">${g("No videos studied yet. It studies every night at 00:20 UTC", "no videos yet. studies every night at 00:20 UTC")} (${g("or", "or")} <span class="mono">make youtube</span>).</div>`;
+  }
+  const TAG = { agrees: g("our data agrees", "facts ✓"), disagrees: g("our data disagrees", "cap"), no_difference: g("no real difference", "no diff"),
+    not_enough_data: g("not enough data yet", "need more data"), untested: g("can't test yet", "can't test") };
+  const line = (r) => {
+    const d = r.data || {};
+    const who = r.traders.length ? ` (${esc(r.traders.slice(0, 3).join(", "))}${r.traders.length > 3 ? "…" : ""})` : "";
+    const tested = ["agrees", "disagrees", "no_difference"].includes(r.verdict) && isNum(d.diff);
+    const why = tested ? ` · ${esc(r.test)}: ${(Math.abs(d.diff) * 100).toFixed(1)} ${g("points", "pts")} ${d.diff > 0 ? g("better", "better") : g("worse", "worse")} (${int(d.n)} ${g("trades", "trades")})`
+      : r.verdict === "not_enough_data" && isNum(d.n) ? ` · ${int(d.n)} ${g("trades so far", "trades so far")}`
+      : r.verdict === "untested" ? ` · ${esc(r.test)}` : "";
+    return `<li title="${g("first heard", "first heard")} ${r.first_heard ? stamp(r.first_heard) : "–"} · ${int(r.mentions)} ${g("mentions", "mentions")}"><span class="mem-tag yt-${r.verdict}">${TAG[r.verdict] || esc(r.verdict)}</span>`
+      + `<span>"${esc(r.words)}" <span class="muted">${g("in", "in")} ${int(r.videos)} ${g(`video${r.videos === 1 ? "" : "s"}`, `vid${r.videos === 1 ? "" : "s"}`)}${who}${why}</span></span></li>`;
+  };
+  const silent = y.rules.length - heard.length;
+  return head + `<ul class="lessons">${heard.map(line).join("")}</ul>`
+    + `<div class="muted">${int(y.studied)} ${g(`video${y.studied === 1 ? "" : "s"} studied`, `vid${y.studied === 1 ? "" : "s"} studied`)} · ${g("last study", "last study")} ${y.checked_at ? agoSpan(y.checked_at) : "–"}`
+    + `${silent ? ` · ${silent} ${g(`rule${silent === 1 ? "" : "s"} not heard yet`, `rule${silent === 1 ? "" : "s"} not heard yet`)}` : ""}</div>`
+    + `<div class="muted">${g("It counts what traders talk about, not whether they're for or against it.", "it counts what they talk about, not if they're for or against it.")}</div>`;
+}
+
 function renderLearner(L) {
   const [left, right] = renderBrain(L.brain).split("<!--split-->");
   let h = "";
@@ -716,7 +743,7 @@ function renderLearner(L) {
   } else {
     h += `<div class="empty">${g("No weekly report yet", "no weekly recap yet")} (${g("Sundays", "Sundays")} 01:00 UTC, ${g("or", "or")} <span class="mono">make weekly</span>).</div>`;
   }
-  $("learner").innerHTML = `<div class="brain-grid"><div>${left}${h}</div><div>${right ?? ""}</div></div>`;
+  $("learner").innerHTML = `<div class="brain-grid"><div>${left}${h}</div><div>${right ?? ""}${renderYoutube(L.youtube)}</div></div>`;
 }
 
 // Small markdown subset (what learner/weekly_report.py writes): headings, lists, tables, emphasis, code.
