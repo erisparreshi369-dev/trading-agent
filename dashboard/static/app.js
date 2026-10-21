@@ -771,9 +771,30 @@ function renderJournal(j) {
     + `<span class="mem-tag ${cls[m.verdict] || ""}">${TAG[m.verdict] || esc(m.verdict)}</span>`
     + `<span>${esc(m.words)} <span class="muted">· ${int(m.n)} ${g("trades", "trades")}, ${sol(m.pnl)} SOL${m.verdict === "too early" ? ` · ${int(m.n)}/${int(j.min_n)}` : ""}</span></span></li>`;
   return head + `<div class="muted">${int(j.trades)} ${g("trades", "trades")}, ${int(j.clean)} ${g("without a mistake", "clean")}</div>`
+    + renderHonest(j.honest)
     + (j.mistakes.length ? `<ul class="lessons">${j.mistakes.map(line).join("")}</ul>` : "")
     + `<details class="report-box"><summary>${g("Last trades", "last trades")}</summary><ul class="journal">${j.last.map((t) => `<li><span class="muted">${stamp(t.at)}</span> ${esc(t.text)}</li>`).join("")}</ul></details>`
     + `<div class="muted">${g(`"costly" after ${j.min_n} trades, when they did 2+ points worse than the rest. Details: make journal.`, `"costly" after ${j.min_n} trades if they did 2+ pts worse. more: make journal.`)}</div>`;
+}
+
+// learner/honest_stats.py: a number that can't be worked out yet shows why, never a made-up value
+function renderHonest(s) {
+  if (!s || !s.n) return "";
+  const unknown = (k) => `<span class="muted" title="${esc(s.why[k] || "")}">${g("unknown", "idk yet")} (${esc(s.why[k] || "")})</span>`;
+  const VERDICT = {
+    "too early": g(`too early: ${int(s.n)}/${int(s.min_n)} trades`, `too early: ${int(s.n)}/${int(s.min_n)}`),
+    losing: g("losing for sure", "losing fr"), winning: g("winning for sure", "winning fr"), "can't tell yet": g("can't tell yet", "can't tell yet"),
+  };
+  const cls = { losing: "vet-hurts", winning: "vet-helps" }[s.verdict] || "vet-too_early";
+  const rows = [
+    [g("Profit factor", "profit factor"), isNum(s.profit_factor) ? s.profit_factor.toFixed(2) : unknown("profit_factor"), g("money won ÷ money lost; above 1 = wins pay for losses", "wins ÷ losses, above 1 = W")],
+    [g("Biggest drop", "biggest drop"), `${sol(-s.max_drawdown)} SOL${isNum(s.max_drawdown_pct) ? ` (${pct(-s.max_drawdown_pct)})` : ""}`, g("max drawdown: biggest fall from a high point of the balance", "max drawdown from the top")],
+    [g("Longest losing streak", "longest L streak"), `${int(s.losing_streak)}`, ""],
+    [g("Without the best trade", "minus the best trade"), isNum(s.without_best) ? `${sol(s.without_best)} SOL${s.carried_by_best ? ` · ${g("one lucky trade carries it", "one lucky trade carrying")}` : ""}` : unknown("without_best"), ""],
+    [g("Real average is likely", "real avg is prob"), isNum(s.lo) ? `${pct(s.lo)} ${g("to", "to")} ${pct(s.hi)}` : unknown("range"), g("average return per trade ± 2 standard errors", "avg ± 2 SE")],
+  ];
+  return `<div class="muted" style="margin-top:6px">${g("Honest numbers, all time", "honest numbers, all time")} <span class="mem-tag ${cls}">${VERDICT[s.verdict] || esc(s.verdict)}</span></div>`
+    + `<ul class="journal">${rows.map(([k, v, tip]) => `<li title="${esc(tip)}"><span>${k}:</span> ${v}</li>`).join("")}</ul>`;
 }
 
 function renderLearner(L) {

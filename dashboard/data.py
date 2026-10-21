@@ -528,8 +528,11 @@ class Snapshot:
         sys.path.insert(0, str(ROOT / "learner"))
         import journal  # read-only queries, standard library only
 
+        import honest_stats
+
         ts = journal.trades(self.c, 0, 2**62)
-        return {"trades": len(ts), "clean": sum(not t["mistakes"] for t in ts), "mistakes": journal.tally(ts),
+        return {"honest": honest_stats.stats(honest_stats.trades(self.c, 0, 2**62), honest_stats.balance_at(self.c, 0)),
+                "trades": len(ts), "clean": sum(not t["mistakes"] for t in ts), "mistakes": journal.tally(ts),
                 "last": [{"at": t["closed_at"], "pnl": t["pnl"], "text": journal.recap(t)} for t in ts[:5]], "min_n": journal.MIN_N}
 
     def veteran(self) -> dict | None:

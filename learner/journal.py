@@ -19,6 +19,8 @@ import sys
 import time
 from pathlib import Path
 
+import honest_stats
+
 ROOT = Path(__file__).resolve().parent.parent
 MIN_N = 15  # trades with a mistake before the tally calls it costly or fine
 
@@ -161,6 +163,13 @@ def main() -> int:
         return 0
     p = lambda x: "-" if x is None else f"{x * 100:+.1f}%"  # noqa: E731
     print(f"Trade journal, last {a.days} days: {len(ts)} trades, {sum(not t['mistakes'] for t in ts)} without a mistake.\n")
+    since = now - a.days * 86_400_000
+    s = honest_stats.stats(honest_stats.trades(c, since, now), honest_stats.balance_at(c, since))
+    sol = lambda x: "-" if x is None else f"{x:+.4f}"  # noqa: E731
+    print("Honest numbers:")
+    for line in honest_stats.lines(s, sol, p):
+        print("  " + line.replace("**", ""))
+    print()
     for m in tally(ts):
         print(f"  {m['verdict']:>10}  {m['n']:>4} trades {m['pnl']:+.4f} SOL, avg {p(m['avg_roi'])} vs {p(m['rest_avg_roi'])} others  - {m['words']} ({m['kind']})")
     print(f"\nLast {min(a.last, len(ts))} trades:")

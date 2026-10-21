@@ -26,6 +26,7 @@ import experiments as ex  # noqa: E402
 import creator_section  # noqa: E402
 import slippage_section  # noqa: E402
 import journal  # noqa: E402
+import honest_stats  # noqa: E402
 import veteran  # noqa: E402
 
 
@@ -175,6 +176,7 @@ def build(c: sqlite3.Connection, now_ms: int, days: int) -> str:
         f"Average per trade this week: {pct(avg_roi)}. Buys that didn't go through (the price jumped too fast): {missed}.",
         "",
     ]
+    md += honest_stats.section(c, since, now_ms, table, sol, pct)
 
     # ---- what's working / not ----
     by_leader = group(c, "p.leader_wallet", since, now_ms)
