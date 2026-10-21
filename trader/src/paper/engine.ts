@@ -3,6 +3,7 @@ import type { DB } from "../lib/db.js";
 import { log } from "../lib/log.js";
 import { bondingCurve, canonicalPool } from "../collector/pools.js";
 import type { EntryDecision, RiskManager } from "../risk/risk-manager.js";
+import type { Results } from "../risk/size-base.js";
 import { maxSlippageBps } from "../lib/safe-settings.js";
 import { simulateBuy, simulateSell, slippageBps, stateFromTrade, type CostBreakdown, type CostModel, type MarketState, type TradeRowLike } from "../sim/market.js";
 
@@ -11,6 +12,37 @@ const priorityOnly = (sol: number): CostBreakdown => ({ platformSol: 0, executor
 
 /** The collector's data modes in which it no longer watches the wallets we copy (see collector/budget.ts). */
 const NO_NEW_TRADES_MODES = ["positions_only", "off"];
+
+/** The collector writes a heartbeat every 30 s: three missed ones and we treat it as gone. */
+export const COLLECTOR_SILENT_MS = 90_000;
+
+/**
+ * If you feel off, don't trade. The bot's version: it is "off" when it can't see. Following a trader
+ * means selling when they sell; if no stream is watching them, that sell would go unseen. Null = fine.
+ * No collector heartbeat at all means no collector ever ran on this database (nothing to judge).
+ */
+export function blindReason(db: DB, now: number): string | null {
+  const hb = db.prepare("SELECT ts, info FROM service_heartbeats WHERE service = 'collector'").get() as { ts: number; info: string | null } | undefined;
+  if (!hb) return null;
+  if (now - hb.ts > COLLECTOR_SILENT_MS) return `can't see the market: collector silent for ${Math.round((now - hb.ts) / 1000)}s`;
+  let streams: { targeted?: boolean | null; firehose?: boolean | null } | undefined;
+  try {
+    streams = (JSON.parse(hb.info ?? "{}") as { streams?: typeof streams }).streams;
+  } catch {
+    streams = undefined;
+  }
+  if (streams && streams.targeted !== true && streams.firehose !== true) return "can't see the traders we copy: no stream is watching them";
+  return null;
+}
+
+/** Realized result of our paper trades that closed in [from, to): what the proven balance is judged on. */
+export function paperResults(db: DB): Results {
+  return (from, to) => {
+    const r = db.prepare(`SELECT COALESCE(SUM(pnl_sol), 0) pnl, COALESCE(SUM(status = 'closed'), 0) trades FROM paper_positions
+      WHERE status IN ('closed', 'failed') AND closed_at >= ? AND closed_at < ?`).get(from, to) as { pnl: number; trades: number };
+    return { pnl: r.pnl, trades: r.trades };
+  };
+}
 
 /** Trades reach SQLite ~0.3-1s after we'd have seen them; wait this long past a fill's due time. */
 export const INGEST_MARGIN_MS = 1_000;
@@ -109,6 +141,8 @@ export class PaperEngine {
     // the day's data budget is nearly gone: what's left is kept for watching the trades already open
     const mode = this.db.prepare("SELECT value FROM kv WHERE key = 'collector.data_mode'").get() as { value: string } | undefined;
     if (mode && NO_NEW_TRADES_MODES.includes(mode.value)) return { ok: false, reason: "data budget nearly used: no new trades until 00:00 UTC" };
+    const blind = blindReason(this.db, this.now());
+    if (blind) return { ok: false, reason: blind };
     const dayStart = Date.parse(new Date(this.now()).toISOString().slice(0, 10));
     const entriesToday = (this.db.prepare("SELECT count(*) n FROM paper_positions WHERE entry_due_at >= ?").get(dayStart) as { n: number }).n;
     const leaderRecentEntries = (this.db.prepare(`SELECT count(*) n FROM (SELECT leader_wallet FROM paper_positions WHERE status != 'failed'

@@ -40,6 +40,10 @@
       "label": "Total loss stop", "gz": "total loss stop", "help": "Down this much from the start and the kill switch stops everything until you clear it." },
     { "key": "override.risk.MIN_FREE_BALANCE_SOL", "path": "risk.MIN_FREE_BALANCE_SOL", "group": "safety", "type": "number", "min": 0.01, "max": 1, "unit": "SOL",
       "label": "SOL always kept for fees", "gz": "SOL kept for fees", "help": "Selling needs fees, so this is never spent on buys." },
+    { "key": "override.risk.SIZE_STEP_WEEKS", "path": "risk.SIZE_STEP_WEEKS", "group": "safety", "type": "int", "min": 2, "max": 26, "unit": "weeks",
+      "label": "Bigger trades only after", "gz": "size up only after", "help": "Trade size comes from a proven balance, not today's. It goes up only after this many winning weeks in a row, and back down if the next week loses." },
+    { "key": "override.risk.SIZE_STEP_PCT", "path": "risk.SIZE_STEP_PCT", "group": "safety", "type": "number", "min": 0.05, "max": 1, "show": "percent",
+      "label": "...and then by at most", "gz": "...and then by at most", "help": "How much bigger the proven balance may get in one step." },
     { "key": "override.paper.max_slippage_bps", "path": "paper.max_slippage_bps", "group": "safety", "type": "number", "min": 10, "max": 5000, "show": "bps",
       "label": "Max price jump vs the trader", "gz": "max price jump vs the trader", "help": "If our buy price is this much above theirs, skip. Sells are never blocked. The brain may still go lower." },
 

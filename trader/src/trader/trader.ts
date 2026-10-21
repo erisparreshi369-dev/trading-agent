@@ -2,7 +2,7 @@ import { existsSync, statSync } from "node:fs";
 import type { Config } from "../lib/config.js";
 import { heartbeat, type DB } from "../lib/db.js";
 import { log } from "../lib/log.js";
-import { PaperEngine } from "../paper/engine.js";
+import { PaperEngine, paperResults } from "../paper/engine.js";
 import { ShadowBook } from "../paper/shadow.js";
 import { RiskManager } from "../risk/risk-manager.js";
 import { limitsFor } from "../risk/limits.js";
@@ -36,7 +36,7 @@ export class Trader {
     private now: () => number = Date.now,
   ) {
     // paper trading: the owner's limits, re-read at every check (limits.ts); the Phase 5 live executor must use limitsFor("live", db)
-    this.risk = new RiskManager(db, killFile, now, () => limitsFor("paper", db));
+    this.risk = new RiskManager(db, killFile, now, () => limitsFor("paper", db), paperResults(db));
     this.paper = new PaperEngine(db, cfg.paper, this.risk, now);
     this.signals = new SignalEngine(db, cfg.signals, info, this.paper, now);
     this.shadow = new ShadowBook(db, cfg, now);

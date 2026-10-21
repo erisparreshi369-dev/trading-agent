@@ -30,6 +30,13 @@ export const RISK = Object.freeze({
   MAX_DRAWDOWN_PCT: 0.3,
   /** Never let free SOL fall below this: exits need fees. */
   MIN_FREE_BALANCE_SOL: 0.05,
+  /**
+   * Size up after consistency, not after profit: trades are sized from a "proven balance", not from
+   * today's. It steps up only after this many profitable weeks in a row (risk/size-base.ts)...
+   */
+  SIZE_STEP_WEEKS: 4,
+  /** ...by at most this share at a time. */
+  SIZE_STEP_PCT: 0.25,
 });
 
 export type RiskLimits = { readonly [K in keyof typeof RISK]: number };
@@ -53,8 +60,10 @@ export const RISK_WALLS: { readonly [K in RiskName]: readonly [number, number] }
   DAILY_LOSS_CAP_PCT: [0.01, 0.5],
   MAX_DRAWDOWN_PCT: [0.05, 0.6],
   MIN_FREE_BALANCE_SOL: [0.01, 1],
+  SIZE_STEP_WEEKS: [2, 26],
+  SIZE_STEP_PCT: [0.05, 1],
 });
-const WHOLE: ReadonlySet<RiskName> = new Set(["MAX_OPEN_POSITIONS", "MAX_ENTRIES_PER_DAY", "WALLET_SHARE_WINDOW", "TIME_EXIT_MS"]);
+const WHOLE: ReadonlySet<RiskName> = new Set(["MAX_OPEN_POSITIONS", "MAX_ENTRIES_PER_DAY", "WALLET_SHARE_WINDOW", "TIME_EXIT_MS", "SIZE_STEP_WEEKS"]);
 
 export const OVERRIDE_PREFIX = "override.risk.";
 

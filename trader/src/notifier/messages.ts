@@ -297,6 +297,7 @@ const SKIP_RULES: Rule[] = [
   [/^risk: position size/, () => same("risk_min_size", "we had too little money left for a trade")],
   [/^risk: free balance/, () => same("risk_reserve", "we keep some money aside to pay fees")],
   [/^risk: already in this token/, () => same("risk_holding", "we already own this coin")],
+  [/^risk: can't see/, () => same("risk_blind", "the bot could not see the market properly at that moment, so it stayed out")],
 ];
 
 export function explainSkip(reason: string): Explained {
@@ -833,6 +834,32 @@ export function dailyLossCap(c: Ctx, equity: number, dayStart: number): string {
   });
 }
 
+export interface SizeStepFacts {
+  direction: "up" | "down";
+  from: number; // proven balance before (SOL)
+  to: number; // ...and after
+  weeks: number; // winning weeks in a row needed for a step up
+}
+
+/** Trade size is based on a proven balance (risk/size-base.ts); it just stepped. */
+export function sizeStep(c: Ctx, f: SizeStepFacts): string {
+  return f.direction === "up"
+    ? render({
+      title: "TRADE SIZE · Bigger trades from now on",
+      happened: `We made money ${f.weeks} weeks in a row, so the bot now sizes trades from ${sol(c, f.to)} instead of ${sol(c, f.from)}.`,
+      mood: "good",
+      why: "Trades only get bigger after steady weeks, never after one lucky day. If next week loses, it goes back down by itself.",
+      todo: "Nothing.",
+    })
+    : render({
+      title: "TRADE SIZE · Back to smaller trades",
+      happened: `The week after the last step up lost money, so the bot sizes trades from ${sol(c, f.to)} again instead of ${sol(c, f.from)}.`,
+      mood: "careful",
+      why: "The bigger size didn't hold up. It can step up again after more steady weeks.",
+      todo: "Nothing.",
+    });
+}
+
 export function startupBlocked(c: Ctx, why: string): string {
   if (why === "helius_key_missing") {
     return render({
@@ -984,6 +1011,8 @@ const EXPLAINERS: Explainer[] = [
     example: "Like a free library card: a few books a day. When they are used up, you come back tomorrow." },
   { match: /EMERGENCY STOP/, simple: () => "All trading is stopped. The bot sold everything and buys nothing new.",
     example: "Like pressing the big red stop button on a machine." },
+  { match: /TRADE SIZE/, simple: () => "How big each trade is. It only grows after several good weeks in a row, and shrinks again if the next week is bad.",
+    example: "Like a new driver: you get the faster car only after months without a crash." },
   { match: /SAFETY LIMIT/, simple: () => "We lost too much today, so the bot rests until tomorrow.",
     example: "Like a rule: if you lose 5 games today, you stop playing until tomorrow." },
   { match: /^STATUS/, simple: () => "A check of every part of the bot: is it working or not?", example: "Like checking that all lights in a house are on." },

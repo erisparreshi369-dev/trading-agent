@@ -12,7 +12,7 @@ export type AlertLevel = "info" | "warn" | "error" | "fatal";
  *   restart                      markStarted(): the previous run crashed or was killed
  *   job_failed, service_failed   scripts/notify-failure.sh (systemd OnFailure)
  */
-export type AlertKind = "kill_switch" | "daily_loss_cap" | "helius_cap" | "startup_blocked" | "error" | "restart" | "job_failed" | "service_failed" | "madeonsol_budget" | "setting_changed";
+export type AlertKind = "kill_switch" | "daily_loss_cap" | "helius_cap" | "startup_blocked" | "error" | "restart" | "job_failed" | "service_failed" | "madeonsol_budget" | "setting_changed" | "size_step";
 
 export interface Alert {
   kind: AlertKind;

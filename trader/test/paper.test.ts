@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import type { DB } from "../src/lib/db.js";
-import { INGEST_MARGIN_MS, PaperEngine, type Position } from "../src/paper/engine.js";
+import { blindReason, COLLECTOR_SILENT_MS, INGEST_MARGIN_MS, PaperEngine, paperResults, type Position } from "../src/paper/engine.js";
 import { RISK } from "../src/risk/limits.js";
 import { RiskManager } from "../src/risk/risk-manager.js";
 import { simulateBuy, simulateSell, stateFromTrade, type CostModel } from "../src/sim/market.js";
@@ -264,5 +264,60 @@ describe("PaperEngine kill switch and restarts", () => {
     s.engine.tick();
     expect(s.risk.haltedToday()).toBe(true);
     expect(leaderBuys(s).decision).toEqual({ ok: false, reason: "daily loss cap reached" });
+  });
+});
+
+describe("if you feel off, don't trade: no new trades while the bot can't see (blindReason)", () => {
+  const beat = (db: DB, ts: number, streams: Record<string, unknown>) =>
+    db.prepare(`INSERT INTO service_heartbeats (service, ts, pid, info) VALUES ('collector', ?, 1, ?)
+      ON CONFLICT(service) DO UPDATE SET ts = excluded.ts, info = excluded.info`).run(ts, JSON.stringify({ streams }));
+
+  it("trades while a stream watches the traders we copy", () => {
+    const s = setup();
+    beat(s.db, s.c.t, { targeted: true, firehose: null });
+    expect(blindReason(s.db, s.c.t)).toBeNull();
+    beat(s.db, s.c.t, { targeted: false, firehose: true }); // the full stream sees them too
+    expect(blindReason(s.db, s.c.t)).toBeNull();
+    expect(leaderBuys(s).decision).toMatchObject({ ok: true });
+  });
+
+  it("no new trade when no stream watches them, or the collector went silent", () => {
+    const s = setup();
+    beat(s.db, s.c.t, { targeted: false, firehose: null });
+    expect(leaderBuys(s).decision).toEqual({ ok: false, reason: "can't see the traders we copy: no stream is watching them" });
+    beat(s.db, s.c.t - COLLECTOR_SILENT_MS - 1_000, { targeted: true });
+    expect(blindReason(s.db, s.c.t)).toBe("can't see the market: collector silent for 91s");
+    expect(s.db.prepare("SELECT count(*) n FROM paper_positions").get()).toEqual({ n: 0 });
+    expect(balance(s.engine)).toBe(1);
+  });
+
+  it("open trades still exit while blind (only new entries stop)", () => {
+    const s = setup();
+    leaderBuys(s);
+    s.c.advance(cfg.execution_delay_ms + INGEST_MARGIN_MS);
+    s.engine.tick();
+    expect(pos(s.db).status).toBe("open");
+    beat(s.db, s.c.t - COLLECTOR_SILENT_MS - 1, {});
+    s.c.advance(RISK.TIME_EXIT_MS);
+    s.engine.tick();
+    s.c.advance(cfg.execution_delay_ms + INGEST_MARGIN_MS);
+    s.engine.tick();
+    expect(pos(s.db)).toMatchObject({ status: "closed", exit_reason: "time_exit" });
+  });
+});
+
+describe("paperResults: what the proven balance is judged on", () => {
+  it("sums closed and failed trades in the window, counting only closed ones as trades", () => {
+    const db = memDb();
+    const sig = signal(db, "m");
+    const ins = db.prepare(`INSERT INTO paper_positions (signal_id, mint, leader_wallet, status, size_sol, leader_price, entry_due_at, closed_at, pnl_sol)
+      VALUES (${sig}, 'm', 'w', ?, 0.02, 1, 0, ?, ?)`);
+    ins.run("closed", 100, 0.01);
+    ins.run("closed", 150, -0.004);
+    ins.run("failed", 120, -0.0003);
+    ins.run("closed", 200, 1); // outside [100, 200)
+    const r = paperResults(db)(100, 200);
+    expect(r.trades).toBe(2);
+    expect(r.pnl).toBeCloseTo(0.0057, 10);
   });
 });

@@ -17,7 +17,7 @@
  */
 import { clock, dayName, duration, plural, size, sol, times, token, TRADES_TO_JUDGE, type ActivityFacts, type BrainFacts, type BrainMemoryFacts, type BuyFacts, type Counted, type Ctx,
   type Explained, type MissedFacts, type PnlFacts, type ReportFacts, type SellFacts, type SkipFacts, type StatusFacts, type TokenRef, type Verdict,
-  type WhyEvent, type PeriodResult, type SettingChange, KEEPS_RESTARTING } from "./messages.js";
+  type WhyEvent, type PeriodResult, type SettingChange, type SizeStepFacts, KEEPS_RESTARTING } from "./messages.js";
 
 // everything else (types, number helpers, isScamSkip, STOP_YES/NO, ...) is shared with plain
 export * from "./messages.js";
@@ -184,6 +184,7 @@ const SKIP_RULES: Rule[] = [
   [/^risk: position size/, () => same("risk_min_size", "we had too little money left for a trade")],
   [/^risk: free balance/, () => same("risk_reserve", "we keep some money aside for fees")],
   [/^risk: already in this token/, () => same("risk_holding", "we already own this coin")],
+  [/^risk: can't see/, () => same("risk_blind", "the bot couldn't see the market properly rn, so it sat this one out")],
   [/^risk: data budget/, () => same("risk_data", "today's free data is almost gone, so no new trades until it resets")],
 ];
 
@@ -607,6 +608,24 @@ export function killSwitch(c: Ctx, reason: string | null, equity: number, start:
   });
 }
 
+export function sizeStep(c: Ctx, f: SizeStepFacts): string {
+  return f.direction === "up"
+    ? render({
+      title: "TRADE SIZE · Bigger trades from now on",
+      happened: `${f.weeks} green weeks in a row, so the bot now sizes trades from ${sol(c, f.to)} instead of ${sol(c, f.from)}.`,
+      mood: "good",
+      why: "trades only get bigger after steady weeks, never after one lucky day. if next week's red it goes back down by itself.",
+      todo: "nothing.",
+    })
+    : render({
+      title: "TRADE SIZE · Back to smaller trades",
+      happened: `the week after the size up was red, so the bot sizes trades from ${sol(c, f.to)} again instead of ${sol(c, f.from)}.`,
+      mood: "careful",
+      why: "the bigger size didn't hold up. it can size up again after more steady weeks.",
+      todo: "nothing.",
+    });
+}
+
 export function dailyLossCap(c: Ctx, equity: number, dayStart: number): string {
   return render({
     title: "SAFETY LIMIT · Trading paused for today",
@@ -749,6 +768,7 @@ const EXPLAINERS: Explainer[] = [
   { match: /DATA HELPER/, simple: () => "MadeOnSol is an extra helper that tells us how a coin's creator did before. we get a few free asks a day.", example: "like a free library card: a few books a day, then you come back tomorrow." },
   { match: /DATA ·/, simple: () => "this is about the market info the bot reads to trade.", example: "like a weather app with no internet: it can't show the weather." },
   { match: /EMERGENCY STOP/, simple: () => "all trading is stopped. the bot sold everything and buys nothing new.", example: "like hitting the big red button." },
+  { match: /TRADE SIZE/, simple: () => "how big each trade is. it only grows after a few green weeks in a row, and shrinks again if the next week's red.", example: "like ranked: you move up a tier after a win streak, not after one lucky game." },
   { match: /SAFETY LIMIT/, simple: () => "we lost too much today, so the bot takes a break till tomorrow.", example: "like a rule: lose 5 games today, you're done till tomorrow." },
   { match: /^STATUS/, simple: () => "a check of every part of the bot: working or not?", example: "like checking all the lights in the house are on." },
   { match: /PROFIT OR LOSS/, simple: () => "how much we made or lost: today, this week, and since the start.", example: "started with 1 SOL, now 1.01 SOL: +0.01 SOL W." },

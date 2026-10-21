@@ -254,6 +254,9 @@ export class Notifier {
         case "daily_loss_cap":
           ok = await this.say(M.dailyLossCap(c, Number(data.equity), Number(data.dayStart)));
           break;
+        case "size_step":
+          ok = await this.say(M.sizeStep(c, { direction: data.direction === "down" ? "down" : "up", from: Number(data.from), to: Number(data.to), weeks: Number(data.weeks) }));
+          break;
         case "helius_cap":
           ok = await this.say(M.dataCapReached(c, Number(data.capMb ?? this.d.cfg.collector.helius.daily_mb_cap), Number(data.openPositions ?? 0)));
           break;

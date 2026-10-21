@@ -72,6 +72,8 @@ export function samples(M: Messages = Plain): { name: string; text: string }[] {
     ["kill: drawdown", M.killSwitch(ctx, "max drawdown: equity 0.6950 < 70% of start 1", 0.695, 1)],
     ["kill: server", M.killSwitch(ctx, "make kill", 0.98, 1)],
     ["daily loss cap", M.dailyLossCap(ctx, 0.95, 1.0)],
+    ["trade size up", M.sizeStep(ctx, { direction: "up", from: 1, to: 1.25, weeks: 4 })],
+    ["trade size down", M.sizeStep(ctx, { direction: "down", from: 1.25, to: 1, weeks: 4 })],
     ["data cap", M.dataCapReached(ctx, 1500)],
     ["data cap, trades open", M.dataCapReached(ctx, 1500, 2)],
     ["setting: data cap", M.settingChanged(ctx, { setting: "helius_daily_mb_cap", from: 1500, to: 4000, reset: false, guardMb: 44000, limit: null })],

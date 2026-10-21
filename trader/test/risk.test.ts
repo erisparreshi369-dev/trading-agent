@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import { ConfigSchema, ROOT } from "../src/lib/config.js";
 import { limitsFor, PAPER_NO_LIMITS, PAPER_TEST_RISK, RISK } from "../src/risk/limits.js";
 import { RiskManager, type AccountSnapshot } from "../src/risk/risk-manager.js";
+import { MIN_WEEK_TRADES, nextSizeBase, WEEK_MS, type Results } from "../src/risk/size-base.js";
 import { clock, memDb } from "./helpers.js";
 
 const killFile = () => join(mkdtempSync(join(tmpdir(), "kill-")), "KILL");
@@ -138,7 +139,7 @@ describe("practice trading without portfolio limits (limits.ts PAPER_NO_LIMITS)"
   it("no cap on open positions, entries per day, one leader's share or position size", () => {
     const r = paper();
     expect(r.checkEntry(acct({ openPositions: 500, entriesToday: 5000, leaderRecentEntries: 20 }))).toEqual({ ok: true, sizeSol: 0.02 });
-    expect(r.checkEntry(acct({ equity: 100, freeBalance: 100, startBalance: 100 }))).toEqual({ ok: true, sizeSol: 2 }); // 2% of equity, no 0.05 cap
+    expect(paper().checkEntry(acct({ equity: 100, freeBalance: 100, startBalance: 100 }))).toEqual({ ok: true, sizeSol: 2 }); // 2% of equity, no 0.05 cap
     expect(r.checkEntry(acct({ equity: 0.2, freeBalance: 0.2 }))).toEqual({ ok: true, sizeSol: 0.004 }); // no minimum size
   });
 
@@ -163,5 +164,56 @@ describe("practice trading without portfolio limits (limits.ts PAPER_NO_LIMITS)"
     expect(r.checkExit({ entryPrice: 1, openedAt: c.t - RISK.TIME_EXIT_MS }, 1)).toBe("time_exit");
     r.kill("make kill");
     expect(r.checkEntry(acct())).toEqual({ ok: false, reason: "kill switch: make kill" });
+  });
+});
+
+describe("size up after consistency, not after profit (size-base.ts)", () => {
+  const DAY = 86_400_000;
+  /** Results from a list of [closedAt, pnl] trades. */
+  const book = (trades: [number, number][]): Results => (from, to) => {
+    const t = trades.filter(([at]) => at >= from && at < to);
+    return { pnl: t.reduce((a, [, p]) => a + p, 0), trades: t.length };
+  };
+  /** `perWeek` trades of `pnl` each, every week for `weeks` weeks before `end`. */
+  const weeksOf = (end: number, weeks: number, pnl: number, perWeek = MIN_WEEK_TRADES): [number, number][] =>
+    Array.from({ length: weeks * perWeek }, (_, i) => [end - Math.floor(i / perWeek) * WEEK_MS - 1 - (i % perWeek) * 1000, pnl]);
+
+  it("a winning day doesn't make the next trade bigger: size follows the starting balance", () => {
+    const c = clock();
+    const r = new RiskManager(memDb(), killFile(), c.now, PAPER_TEST_RISK, book([])); // no daily loss halt in the way
+    expect(r.checkEntry(acct())).toEqual({ ok: true, sizeSol: 0.02 });
+    expect(r.checkEntry(acct({ equity: 2, freeBalance: 2 }))).toEqual({ ok: true, sizeSol: 0.02 }); // doubled the account: same size
+    expect(r.checkEntry(acct({ equity: 0.8, freeBalance: 0.8 }))).toEqual({ ok: true, sizeSol: 0.016 }); // losing still shrinks it
+  });
+
+  it("steps up only after 4 profitable weeks in a row, by at most 25%, never above the real balance", () => {
+    const start = { base: 1, prev: null, stepAt: 0 };
+    const now = 4 * WEEK_MS;
+    expect(nextSizeBase(start, 2, now, book(weeksOf(now, 4, 0.01)), 4, 0.25)).toEqual({ state: { base: 1.25, prev: 1, stepAt: now }, event: "up" });
+    expect(nextSizeBase(start, 1.1, now, book(weeksOf(now, 4, 0.01)), 4, 0.25)?.state.base).toBe(1.1);
+    expect(nextSizeBase(start, 2, now - 1, book(weeksOf(now, 4, 0.01)), 4, 0.25)).toBeNull(); // not 4 weeks since the last step yet
+    expect(nextSizeBase(start, 0.9, now, book(weeksOf(now, 4, 0.01)), 4, 0.25)).toBeNull(); // not up overall
+    const oneBadWeek = weeksOf(now, 4, 0.01).concat([[now - 2 * WEEK_MS + DAY, -1]]);
+    expect(nextSizeBase(start, 2, now, book(oneBadWeek), 4, 0.25)).toBeNull();
+    expect(nextSizeBase(start, 2, now, book(weeksOf(now, 4, 0.01, MIN_WEEK_TRADES - 1)), 4, 0.25)).toBeNull(); // too few trades to prove anything
+  });
+
+  it("goes back down if the week after a step-up loses; a good week ends the trial", () => {
+    const s = { base: 1.25, prev: 1, stepAt: 0 };
+    expect(nextSizeBase(s, 1.3, WEEK_MS - 1, book([[DAY, -0.1]]), 4, 0.25)).toBeNull();
+    expect(nextSizeBase(s, 1.3, WEEK_MS, book([[DAY, -0.1]]), 4, 0.25)).toEqual({ state: { base: 1, prev: null, stepAt: WEEK_MS }, event: "down" });
+    expect(nextSizeBase(s, 1.3, WEEK_MS, book([[DAY, 0.1]]), 4, 0.25)).toEqual({ state: { base: 1.25, prev: null, stepAt: 0 }, event: "kept" });
+  });
+
+  it("the risk manager steps the proven balance it sizes from, and remembers it across restarts", () => {
+    const c = clock();
+    const db = memDb();
+    const t0 = c.t;
+    const r = new RiskManager(db, killFile(), c.now, RISK, book(weeksOf(t0 + 4 * WEEK_MS, 4, 0.01)));
+    r.tick({ equity: 1, startBalance: 1 });
+    expect(r.sizeBase()).toEqual({ base: 1, prev: null, stepAt: t0 });
+    c.advance(4 * WEEK_MS);
+    expect(r.checkEntry(acct({ equity: 2, freeBalance: 2 }))).toEqual({ ok: true, sizeSol: 0.025 }); // 2% of 1.25
+    expect(new RiskManager(db, killFile(), c.now).sizeBase()).toEqual({ base: 1.25, prev: 1, stepAt: c.t });
   });
 });
