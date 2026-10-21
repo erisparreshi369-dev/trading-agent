@@ -34,6 +34,12 @@ notifier: build
 dashboard: ## run the read-only dashboard in the foreground (systemd runs it as trading-dashboard on :8080)
 	$(PY) dashboard/server.py --port $(or $(PORT),8080)
 
+app: ## open the dashboard in its own window (not a browser tab)
+	/usr/bin/python3 dashboard/app.py --port $(or $(PORT),8080) &
+
+install-app: ## add "Trading Dashboard" to the app menu and the desktop
+	bash scripts/install-app.sh
+
 intel: build ## MadeOnSol daily job now: creator records, early-buyer scores, candidate wallets (systemd runs it 00:02 UTC)
 	cd trader && node dist/intel/index.js
 

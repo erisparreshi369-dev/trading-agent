@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>The Binder</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Onest:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--page:#16132B;--pocket:#1E1A38;--pocket-line:rgba(255,255,255,.07);--stock:#F4F1FF;--stock-2:#E7E1FB;--ink:#1A1630;--ink-2:#4C4568;--on:#EDE9FF;--on-2:#A9A2CC;
+--sun:#FFD23F;--w:#3FB34F;--l:#F0473C;--psy:#9B6BFF;--sea:#3D8BFF;--slate:#8C86A8}
+*{box-sizing:border-box}html,body{width:1440px;height:900px;overflow:hidden;margin:0;background:var(--page);color:var(--on);font:14px/1.4 Onest,sans-serif}
+.num{font-variant-numeric:tabular-nums}
+.top{height:60px;display:flex;align-items:center;gap:18px;padding:0 24px;border-bottom:1px solid var(--pocket-line)}
+.mode{font:800 15px/1 "Bricolage Grotesque";letter-spacing:.08em;color:var(--ink);background:var(--sun);padding:7px 12px;border-radius:8px}
+.name{font:700 17px "Bricolage Grotesque"}.live{color:var(--on-2);font-size:13px}.live b{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--w);margin-right:6px}
+nav{display:flex;gap:4px;margin-left:18px}nav a{color:var(--on-2);text-decoration:none;font-weight:600;padding:8px 14px;border-radius:999px}
+nav a.on{color:var(--ink);background:var(--stock)}
+.right{margin-left:auto;display:flex;gap:8px;align-items:center}
+.pill{font-weight:600;font-size:12.5px;padding:7px 12px;border-radius:999px;background:var(--pocket);border:1px solid var(--pocket-line)}
+.pill.warn{background:#3A2E12;color:#FFD979;border-color:#5A4718}
+.grid{display:grid;grid-template-columns:1fr 1fr 1fr 372px;grid-template-rows:404px 1fr;gap:14px;padding:16px 24px;height:840px}
+.pocket{background:var(--pocket);border:1px solid var(--pocket-line);border-radius:18px;padding:10px;min-height:0}
+.card{background:var(--stock);color:var(--ink);border-radius:12px;height:100%;padding:14px 16px;border:6px solid var(--sun);display:flex;flex-direction:column;box-shadow:0 10px 24px rgba(0,0,0,.35)}
+.bag{grid-column:1/3}
+.ch{display:flex;justify-content:space-between;align-items:baseline}
+.ch h2{margin:0;font:800 22px "Bricolage Grotesque";letter-spacing:-.01em}.ch span{font-weight:600;color:var(--ink-2);font-size:12.5px}
+.hp{display:flex;align-items:baseline;gap:14px;margin-top:6px}
+.hp b{font:800 64px/1 "Bricolage Grotesque";letter-spacing:-.03em}.hp i{font-style:normal;font-weight:700;color:var(--ink-2)}
+.art{flex:none;margin:10px 0;background:#FFF9DB;border:1px solid #EBDC9A;border-radius:8px;height:150px;position:relative}
+.art svg{position:absolute;inset:0}
+.moves{display:grid;grid-template-columns:1fr auto;row-gap:6px;border-top:1px solid #D9D2F0;padding-top:8px}
+.moves div{font-weight:600}.moves .v{font:800 17px "Bricolage Grotesque"}.l{color:var(--l)}.w{color:var(--w)}
+.flavor{margin-top:auto;font-size:13px;color:var(--ink-2);font-style:italic;border-top:1px solid #D9D2F0;padding-top:8px}
+.ok .card{border-color:var(--w)}
+.row{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid #E1DAF6;font-weight:600}.row:last-of-type{border:0}
+.row em{margin-left:auto;font-style:normal;font-size:12.5px;color:var(--ink-2);font-weight:500}
+.dot{width:10px;height:10px;border-radius:50%;background:var(--w)}
+.cap{background:#FFF1D1;border-radius:8px;padding:10px 12px;font-weight:600;font-size:13px;margin-top:8px}
+.meter{height:8px;border-radius:4px;background:#F3C9C4;margin-top:8px}.meter i{display:block;height:100%;width:100%;border-radius:4px;background:var(--l)}
+.ctl{display:flex;gap:8px;align-items:center;margin-top:10px;font-weight:600;font-size:13px}
+.ctl input{width:84px;font:600 14px Onest;padding:6px 8px;border:1px solid #C9C0EA;border-radius:8px;background:#fff}
+.ctl button{font:700 13px Onest;padding:7px 14px;border:0;border-radius:8px;background:var(--ink);color:var(--stock)}
+.traders{grid-column:1/4;display:grid;grid-template-columns:repeat(5,1fr);gap:10px;padding:10px}
+.tc{border-width:5px;padding:10px 12px}
+.tc h3{margin:0;font:800 17px "Bricolage Grotesque"}.tc .g{font-size:12px;font-weight:600;color:var(--ink-2)}
+.tc .big{font:800 34px/1.1 "Bricolage Grotesque";margin-top:10px}.tc .s{font-size:12.5px;color:var(--ink-2);font-weight:600}
+.tc .bar{height:6px;background:var(--stock-2);border-radius:3px;margin-top:10px}
+.tc dl{margin:auto 0 0;display:grid;grid-template-columns:1fr auto;gap:4px 8px;font-size:12.5px;border-top:1px solid #D9D2F0;padding-top:8px}.tc dt{color:var(--ink-2);font-weight:600}.tc dd{margin:0;font-weight:700}.tc .bar i{display:block;height:100%;border-radius:3px;background:var(--ink)}
+.holo{border-color:transparent;background:linear-gradient(var(--stock),var(--stock)) padding-box,linear-gradient(125deg,#FFD23F,#FF7AC8,#7AE7FF,#9B6BFF,#FFD23F) border-box}
+.r2{border-color:var(--sea)}.r3{border-color:var(--psy)}.r4,.r5{border-color:var(--slate)}
+.rail{grid-column:4;grid-row:1/3;display:flex;flex-direction:column;gap:14px;padding:0;background:none;border:0}
+.feed{flex:1;background:var(--pocket);border:1px solid var(--pocket-line);border-radius:18px;padding:14px 16px;overflow:hidden}
+.feed h2,.brain h2{margin:0 0 10px;font:800 19px "Bricolage Grotesque"}
+.ev{display:grid;grid-template-columns:42px 1fr;gap:2px 10px;padding:9px 0;border-bottom:1px solid var(--pocket-line);font-size:13.5px}
+.ev time{color:var(--on-2);font-size:12px;padding-top:2px}.tag{font:700 10.5px Onest;letter-spacing:.06em;padding:2px 7px;border-radius:999px;justify-self:start}
+.ev p{grid-column:2;margin:0;color:var(--on)}
+.t-new{background:#2C2750;color:#C9C2F2}.t-cp{background:#173B22;color:#8FE39C}.t-buy{background:#2B2350;color:#C7B2FF}.t-sk{background:#3D1E1F;color:#FF9C94}.t-tr{background:#16304F;color:#9CC6FF}
+.brain{background:var(--pocket);border:1px solid var(--pocket-line);border-radius:18px;padding:14px 16px}
+.brain .st{color:var(--on-2);font-size:13px;font-weight:600}
+.prog{display:flex;gap:10px;margin:8px 0 10px}.prog div{flex:1;font-size:12px;color:var(--on-2);font-weight:600}
+.prog i{display:block;height:6px;border-radius:3px;background:#2C2750;margin-top:4px;overflow:hidden}.prog i b{display:block;height:100%;background:var(--psy)}
+.lessons{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.lc{background:var(--stock);color:var(--ink);border:4px solid var(--psy);border-radius:9px;padding:7px;height:96px;font-size:11.5px;font-weight:600;display:flex;flex-direction:column}
+.lc b{font:800 15px "Bricolage Grotesque";margin-top:auto}
+</style></head><body>
+<header class="top">
+  <span class="mode">PAPER</span><span class="name">trading-agent</span><span class="live"><b></b>live · 22:18</span>
+  <nav><a class="on" href="#">the bag</a><a href="#">traders</a><a href="#">the brain</a><a href="#">past trades</a></nav>
+  <div class="right"><span class="pill warn">copying paused till 00:00 UTC</span><span class="pill">practice: no limits fr</span><span class="pill">gen z ▾</span></div>
+</header>
+<main class="grid">
+  <section class="pocket bag"><div class="card">
+    <div class="ch"><h2>The Bag</h2><span>practice money · started 1.00 SOL</span></div>
+    <div class="hp num"><b>0.9772</b><i>SOL</i><i class="l">−0.0228 all time · −2.3%</i></div>
+    <div class="art"><svg viewBox="0 0 640 150" preserveAspectRatio="none" aria-label="bag over time">
+      <line x1="0" x2="640" y1="22" y2="22" stroke="#C9B76A" stroke-dasharray="4 4"/>
+      <path d="M8 22H40V38H62V30H70V52H104V60H160V66H210V96H640" fill="none" stroke="#1A1630" stroke-width="3" stroke-linejoin="round"/>
+      <circle cx="632" cy="96" r="6" fill="#F0473C" stroke="#FFF9DB" stroke-width="3"/>
+      </svg></div>
+    <div class="moves num"><div>Today</div><div class="v l">−0.0228 SOL · L</div><div>W rate</div><div class="v">9% <small style="font:600 12px Onest;color:#4C4568">1 W of 11</small></div><div>Worst dip</div><div class="v">2.3%</div></div>
+    <p class="flavor">down a lil. lowkey mid, not cooked. fees we ate: 0.0159 SOL.</p>
+  </div></section>
+  <section class="pocket ok"><div class="card">
+    <div class="ch"><h2>Is it OK?</h2><span>all vibing</span></div>
+    <div class="row"><i class="dot"></i>data collector<em>pinged 6s ago</em></div>
+    <div class="row"><i class="dot"></i>trader<em>pinged 30s ago</em></div>
+    <div class="row"><i class="dot"></i>texter<em>pinged 2s ago</em></div>
+    <div class="row"><i class="dot" style="background:var(--psy)"></i>the brain<em>studies at 00:40 UTC</em></div>
+    <div class="cap">today's free data is used up. copying pauses till 00:00 UTC (02:00 your time).<div class="meter"><i></i></div><div style="font-size:12px;margin-top:4px" class="num">1,500 / 1,500 MB</div></div>
+    <div class="ctl">daily data limit <input value="1500" aria-label="daily data limit"> MB <button>save</button></div>
+  </div></section>
+  <section class="pocket traders" aria-label="traders we copy">
+    <div class="card tc holo"><h3>4nDJ…tZ4s</h3><span class="g">top trader · grade 0.104</span><div class="big w num">+19.0%</div><span class="s">copy return · 75% W rate</span><div class="bar"><i style="width:100%"></i></div><dl class="num"><dt>trades 24h</dt><dd>72</dd><dt>chances 24h</dt><dd>23 (3 copied)</dd><dt>our W/L</dt><dd><span class='l'>−0.0078</span></dd></dl></div>
+    <div class="card tc r2"><h3>EUku…ziAo</h3><span class="g">grade 0.047</span><div class="big w num">+7.6%</div><span class="s">copy return · 69% W rate</span><div class="bar"><i style="width:45%"></i></div><dl class="num"><dt>trades 24h</dt><dd>102</dd><dt>chances 24h</dt><dd>33 (0 copied)</dd><dt>our W/L</dt><dd>0.0000</dd></dl></div>
+    <div class="card tc r3"><h3>FtRT…2Gp7</h3><span class="g">grade 0.020</span><div class="big w num">+3.0%</div><span class="s">copy return · 42% W rate</span><div class="bar"><i style="width:19%"></i></div><dl class="num"><dt>trades 24h</dt><dd>72</dd><dt>chances 24h</dt><dd>18 (0 copied)</dd><dt>our W/L</dt><dd>0.0000</dd></dl></div>
+    <div class="card tc r4"><h3>Hbp8…Dqcq</h3><span class="g">grade 0.012</span><div class="big w num">+2.5%</div><span class="s">copy return · 40% W rate</span><div class="bar"><i style="width:12%"></i></div><dl class="num"><dt>trades 24h</dt><dd>80</dd><dt>chances 24h</dt><dd>21 (0 copied)</dd><dt>our W/L</dt><dd>0.0000</dd></dl></div>
+    <div class="card tc r5"><h3>8p4j…omaq</h3><span class="g">grade 0.005</span><div class="big w num">+1.2%</div><span class="s">copy return · 43% W rate</span><div class="bar"><i style="width:5%"></i></div><dl class="num"><dt>trades 24h</dt><dd>34</dd><dt>chances 24h</dt><dd>0 (0 copied)</dd><dt>our W/L</dt><dd>0.0000</dd></dl></div>
+  </section>
+  <aside class="rail">
+    <section class="feed"><h2>Live tea</h2>
+      <div class="ev"><time>22:18</time><span class="tag t-new">NEW COIN</span><p>$ENERGY just dropped · creator aped 1.00 SOL</p></div>
+      <div class="ev"><time>22:16</time><span class="tag t-cp">COPIED</span><p>copying 4Yy3…5AeY on $RENT</p></div>
+      <div class="ev"><time>22:16</time><span class="tag t-buy">WE BOUGHT</span><p>$RENT for 0.0200 SOL</p></div>
+      <div class="ev"><time>22:15</time><span class="tag t-sk">SKIPPED</span><p>EUku…ziAo on $Trainooor: the creator already sold, that's giving scam</p></div>
+      <div class="ev"><time>22:15</time><span class="tag t-tr">TRADER BUY</span><p>4nDJ…tZ4s aped 0.226 SOL into $Trainooor</p></div>
+      <div class="ev"><time>22:14</time><span class="tag t-buy">WE SOLD</span><p>$RENT for 0.0175 SOL (our trader sold, so we did)</p></div>
+    </section>
+    <section class="brain"><h2>The brain</h2><span class="st">just studying for now · never forgets</span>
+      <div class="prog num"><div>chances studied 106/200<i><b style="width:53%"></b></i></div><div>test trades 1/30<i><b style="width:3%"></b></i></div></div>
+      <div class="lessons">
+        <div class="lc">tiny buys, under 0.1 SOL<b class="l">L · 8.5</b></div>
+        <div class="lc">coin under a minute old<b class="l">L · 3.6</b></div>
+        <div class="lc">trader with a good grade<b class="w">W · 2.5</b></div>
+        <div class="lc">creator spammed 5+ coins<b class="w">W · 2.2</b></div>
+      </div>
+    </section>
+  </aside>
+</main>
+</body></html>

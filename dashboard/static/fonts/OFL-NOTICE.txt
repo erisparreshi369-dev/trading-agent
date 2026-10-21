@@ -1,0 +1,3 @@
+Pixelify Sans (c) The Pixelify Sans Project Authors, and Rubik (c) The Rubik Project Authors.
+Both licensed under the SIL Open Font License 1.1 (https://openfontlicense.org).
+Downloaded from Google Fonts (latin subset, variable woff2) on 2026-10-21 and self-hosted so the dashboard works offline.

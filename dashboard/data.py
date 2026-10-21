@@ -20,7 +20,8 @@ import settings
 
 ROOT = Path(__file__).resolve().parent.parent
 SERVICES = ["collector", "trader", "notifier"]
-LEARNER_UNITS = {"weekly": "weekly report / retrain", "score": "wallet re-scoring"}
+LEARNER_UNITS = {"weekly": "weekly report", "score": "wallet re-scoring", "brain": "learning brain study"}
+ALWAYS_ON = {"brain"}  # learner units that run all the time (the brain studies after every trade), not on a timer
 STALE_HEARTBEAT_MS = 5 * 60_000
 QUIET_MS = 5 * 60_000
 SHRINK_K = 10  # trader/src/scoring/score.ts: pseudo-trades of zero ROI in the wallet score
@@ -96,6 +97,14 @@ def madeonsol_limits(path: Path = ROOT / "config/config.yaml") -> dict[str, floa
         if k in out:
             out[k] = 1.0 if v == "true" else 0.0 if v == "false" else float(v)
     return out
+
+
+def voice(path: Path = ROOT / "config/config.yaml") -> str:
+    """How the dashboard talks: notifier.voice from config.yaml (genz or plain), same switch as Telegram."""
+    text = path.read_text() if path.exists() else ""
+    m = re.search(r"^notifier:\n((?:[ \t]+.*\n|\n)*)", text + "\n", re.M)
+    v = re.search(r"^[ \t]+voice:\s*(\w+)", m.group(1), re.M) if m else None
+    return v.group(1) if v and v.group(1) in ("genz", "plain") else "plain"
 
 
 def scrub_keys(text: str | None) -> str | None:
@@ -201,6 +210,7 @@ class Snapshot:
         info = {k: json.loads(r["info"] or "{}") for k, r in heartbeats.items()}
         positions = self.positions(now)
         money = self.money(now, positions)
+        st = settings.all_current(self.c) if self.has("kv") else {}
         return {
             "now": now,
             "mode": (info.get("trader", {}).get("mode") or "unknown").upper(),
@@ -209,12 +219,13 @@ class Snapshot:
             "positions": positions,
             "closed": self.closed(),
             "wallets": self.cached("wallets", 10, lambda: self.wallets(now)),
-            "risk": self.risk(now, money, positions),
+            "risk": self.risk(now, money, positions, st),
             "data": self.data(now, info.get("collector", {})),
             "latency": self.cached("latency", 15, lambda: self.latency(now)),
             "learner": self.cached("learner", 30, lambda: self.learner(svc, info.get("scoring"), heartbeats.get("scoring"))),
-            "madeonsol": self.cached("madeonsol", 10, lambda: self.madeonsol(now, info.get("intel"), heartbeats.get("intel"), svc)),
-            "settings": {name: settings.current(self.c, name) for name in settings.SETTINGS} if self.has("kv") else {},
+            "madeonsol": self.cached("madeonsol", 10, lambda: self.madeonsol(now, info.get("intel"), heartbeats.get("intel"), svc, st)),
+            "settings": st,
+            "settings_meta": settings.meta(),
         }
 
     # ---- 1. services
@@ -237,17 +248,25 @@ class Snapshot:
                 "crashes_today": int(crashes or 0), "heartbeat_at": hb["ts"] if hb else None, "info": info.get(name, {}),
                 "run_state": run["state"] if run else None, "crash_detail": run["detail"] if run else None,
             })
-        # the learner is timer-driven: "ok" means its timers are scheduled and the last runs succeeded
+        # the learner: "ok" means its timers are scheduled, the last runs succeeded and the always-on brain is studying
         runs = []
         for unit, label in LEARNER_UNITS.items():
             s = svc.get(unit, {})
+            if unit in ALWAYS_ON:
+                bh = heartbeats.get(unit)
+                runs.append({"unit": unit, "label": label, "active": s.get("active"), "result": s.get("result"), "always_on": True,
+                             "ok": s.get("active") == "active" and bool(bh) and now - bh["ts"] < STALE_HEARTBEAT_MS,
+                             "last_run_at": (json.loads(bh["info"] or "{}").get("last") or {}).get("at") if bh else None, "next_at": None})
+                continue
             runs.append({"unit": unit, "label": label, "active": s.get("active"), "result": s.get("result"),
                          "last_run_at": s.get("last_exit_at"), "next_at": (s.get("timer") or {}).get("next_at")})
+        timed = [r for r in runs if not r.get("always_on")]
         hb = heartbeats.get("scoring")
         out.append({
-            "name": "learner", "state": "running" if any(r["active"] == "active" for r in runs) else
-            ("scheduled" if all(r["next_at"] for r in runs) else "not scheduled"),
-            "ok": all(r["next_at"] for r in runs) and all(r["result"] in (None, "success") for r in runs),
+            "name": "learner", "state": "running" if any(r["active"] == "active" and not r.get("always_on") for r in runs) else
+            ("scheduled" if all(r["next_at"] for r in timed) else "not scheduled"),
+            "ok": all(r["next_at"] for r in timed) and all(r["result"] in (None, "success") for r in timed)
+            and all(r["ok"] for r in runs if r.get("always_on")),
             "runs": runs, "heartbeat_at": hb["ts"] if hb else None,
             "restarts": sum(svc.get(u, {}).get("restarts", 0) for u in LEARNER_UNITS), "uptime_s": None,
         })
@@ -368,11 +387,15 @@ class Snapshot:
                 "last_run_at": self.one("SELECT max(run_at) FROM wallet_scores")}
 
     # ---- 6. risk
-    def risk(self, now: int, money: dict, positions: list[dict]) -> dict:
-        L = self.limits
+    def risk(self, now: int, money: dict, positions: list[dict], st: dict | None = None) -> dict:
+        # the owner's dashboard values where set (settings.py), else the normal ones from limits.ts
+        st = st or {}
+        L = {**self.limits, **{n[5:]: v["value"] for n, v in st.items() if n.startswith("risk.") and n != "risk.PAPER_NO_LIMITS"}}
+        if L.get("MIN_POSITION_SOL", 0) > L.get("MAX_POSITION_SOL", 1):  # the bot ignores a contradicting pair
+            L["MIN_POSITION_SOL"], L["MAX_POSITION_SOL"] = self.limits.get("MIN_POSITION_SOL"), self.limits.get("MAX_POSITION_SOL")
         rs = self.c.execute("SELECT * FROM risk_state WHERE id = 1").fetchone() if self.has("risk_state") else None
         kill_file = (ROOT / "data/KILL").exists()
-        no_limits = paper_no_limits()
+        no_limits = st["risk.PAPER_NO_LIMITS"]["value"] if "risk.PAPER_NO_LIMITS" in st else paper_no_limits()
         out = {
             "paper_no_limits": no_limits,
             "limits": L, "open": len(positions), "max_open": None if no_limits else L.get("MAX_OPEN_POSITIONS"),
@@ -451,8 +474,11 @@ class Snapshot:
         ], "note": "block_time has 1 s resolution, so detect is coarse"}
 
     # ---- 10. MadeOnSol helper (daily job only)
-    def madeonsol(self, now: int, job: dict | None, job_hb, svc: dict) -> dict:
+    def madeonsol(self, now: int, job: dict | None, job_hb, svc: dict, st: dict | None = None) -> dict:
         lim = madeonsol_limits()
+        for k, name in (("daily_requests", "madeonsol.daily_requests"), ("warn_pct", "madeonsol.warn_pct"), ("stop_pct", "madeonsol_stop_pct")):
+            if st and name in st:
+                lim[k] = st[name]["value"]
         out = {"enabled": bool(lim["enabled"]), "limit": int(lim["daily_requests"]), "stop_at": int(lim["daily_requests"] * lim["stop_pct"] / 100),
                "warn_pct": lim["warn_pct"], "used_today": 0, "last_ok_at": None, "last_error_at": None, "last_error": None,
                "job_at": job_hb["ts"] if job_hb else None, "job": job, "next_run_at": (svc.get("intel", {}).get("timer") or {}).get("next_at"),
@@ -484,7 +510,50 @@ class Snapshot:
         if reports:
             r = reports[-1]
             report = {"name": r.name, "at": int(r.stat().st_mtime * 1000), "markdown": r.read_text()[:60_000]}
-        return {"model": model, "report": report, "scoring": scoring, "scoring_at": scoring_hb["ts"] if scoring_hb else None}
+        brain = self.brain()
+        if brain and brain.get("model"):
+            model = brain.pop("model")  # the learning brain's newest model (models/current.json was the pre-brain placeholder)
+        return {"model": model, "report": report, "scoring": scoring, "scoring_at": scoring_hb["ts"] if scoring_hb else None, "brain": brain}
+
+    def brain(self) -> dict | None:
+        """The learning brain: newest model and exam, its latest lessons, and how much it remembers."""
+        if not self.has("brain_models"):
+            return None
+        last = self.q("SELECT id, trained_at, version, active, studied, model, exam FROM brain_models ORDER BY id DESC LIMIT 1")
+        notes = self.q("SELECT ts, kind, text, data FROM brain_notes WHERE model_id = ? OR (? IS NULL AND model_id IS NULL) ORDER BY id",
+                       last[0]["id"] if last else None, last[0]["id"] if last else None)
+        if not last:
+            waiting = self.q("SELECT ts, text, data FROM brain_notes ORDER BY id DESC LIMIT 1")
+            return {"active": False, "studied": json.loads(waiting[0]["data"] or "{}").get("studied", 0) if waiting else 0,
+                    "studied_at": waiting[0]["ts"] if waiting else None, "nights": 0, "lessons_total": 0, "lessons": [], "exam": None, "study": None}
+        r = last[0]
+        out = {
+            "active": bool(r["active"]), "studied": r["studied"], "studied_at": r["trained_at"], "version": r["version"],
+            "exam": json.loads(r["exam"]), "model": json.loads(r["model"]),
+            "nights": self.one("SELECT count(DISTINCT trained_at / 86400000) FROM brain_models"),  # UTC days, not runs
+            "lessons_total": self.one("SELECT count(*) FROM brain_notes WHERE kind = 'lesson'"),
+            "lessons": [], "study": None,
+        }
+        for n in notes:
+            d = json.loads(n["data"] or "{}")
+            if n["kind"] == "lesson":
+                out["lessons"].append({**d, "text": n["text"]})
+            elif n["kind"] == "study":
+                out["study"] = {**d, "text": n["text"]}
+        if self.has("brain_memory"):  # long-term memory: every lesson ever, strongest first; its own skips; the diary
+            order = {"confirmed": 0, "changed_mind": 1, "new": 2, "fading": 3}
+            mem = [dict(r) for r in self.q("SELECT key, kind, words, status, nights_seen, nights_same, direction, diff, first_diff, first_seen_at, changed_at, "
+                                           "with_n, with_avg, data FROM brain_memory")]
+            out["memory"] = sorted((m for m in mem if m["kind"] == "lesson" and m["status"] != "no_difference"),
+                                   key=lambda m: (order.get(m["status"], 9), -abs(m["diff"] or 0)))
+            own = next((m for m in mem if m["kind"] == "own_skips"), None)
+            out["own_skips"] = {**json.loads(own["data"] or "{}"), "status": own["status"], "nights_same": own["nights_same"]} if own else None
+            out["diary"] = [{"ts": r["ts"], "text": r["text"], **json.loads(r["data"] or "{}")}
+                            for r in self.q("SELECT ts, text, data FROM brain_notes WHERE kind = 'memory' ORDER BY id DESC LIMIT 6")]
+            out["remembered_total"] = len(out["memory"])  # same count as Telegram /brain: lessons with a real difference
+        if self.has("signals"):  # what its skips did since it was allowed to skip
+            out["skipped_24h"] = self.one("SELECT count(*) FROM signals WHERE ts > ? AND reasons LIKE '%model expects%'", now_ms() - 86_400_000)
+        return out
 
 
 def pct(xs: list[float]) -> dict:
@@ -613,13 +682,14 @@ class Feed:
         dev = r["initial_buy_lamports"]
         return _item(f"tok:{r['rid']}", "launch", "launch", r["first_seen_at"],
                      f"{_sym(r)} launched" + (f" · dev bought {dev / 1e9:.2f} SOL" if dev else ""),
-                     mint=r["mint"], wallet=r["creator"], mayhem=bool(r["is_mayhem_mode"]))
+                     mint=r["mint"], wallet=r["creator"], mayhem=bool(r["is_mayhem_mode"]), sym=_sym(r), dev=dev / 1e9 if dev else None)
 
     def _trade(self, r) -> dict:
         side = "buy" if r["is_buy"] else "sell"
         return _item(f"tr:{r['id']}", "wallet", f"wallet_{side}", r["received_at"],
                      f"{r['label'] or _short(r['wallet'])} {'bought' if r['is_buy'] else 'sold'} {r['sol_lamports'] / 1e9:.3f} SOL of {_sym(r)}",
-                     mint=r["mint"], wallet=r["wallet"], venue=r["venue"], sol=r["sol_lamports"] / 1e9, price=r["price_sol"])
+                     mint=r["mint"], wallet=r["wallet"], venue=r["venue"], sol=r["sol_lamports"] / 1e9, price=r["price_sol"],
+                     sym=_sym(r), who=r["label"] or _short(r["wallet"]))
 
     def _signal(self, r) -> dict:
         d = r["decision"]
@@ -628,7 +698,7 @@ class Feed:
         verb = {"enter": "FOLLOWED", "reject": "rejected", "risk_block": "blocked by risk"}.get(d, d)
         return _item(f"sig:{r['id']}", cat, d, r["ts"], f"signal {verb}: {_short(r['wallet'])} → {_sym(r)}",
                      mint=r["mint"], wallet=r["wallet"], score=r["score"], reasons=reasons,
-                     features=json.loads(r["features"] or "{}"))
+                     features=json.loads(r["features"] or "{}"), sym=_sym(r))
 
     def _fill(self, r) -> dict:
         side, ok = r["side"], bool(r["ok"])
@@ -641,7 +711,8 @@ class Feed:
         pnl = r["pnl_sol"] if side == "sell" and ok else None
         return _item(f"fill:{r['fid']}", "trade", f"paper_{side}" if ok else "fill_failed", r["ts"], text,
                      mint=r["mint"], wallet=r["leader_wallet"], pnl=pnl,
-                     pnl_pct=pnl / r["cost_sol"] if pnl is not None and r["cost_sol"] else None, fees=r["fees_sol"])
+                     pnl_pct=pnl / r["cost_sol"] if pnl is not None and r["cost_sol"] else None, fees=r["fees_sol"],
+                     sym=_sym(r), side=side, sol=r["sol"], slip=r["slippage_bps"], reason=r["reason"])
 
     def _alert(self, r) -> dict:
         lvl, keys = r["level"], r.keys()
@@ -654,7 +725,8 @@ class Feed:
     def _gap(self, r) -> dict:
         expected = r["reason"] in ("off-hours", "daily budget used", "stopped")
         return _item(f"gap:{r['id']}", "system" if expected else "error", "gap", r["started_at"],
-                     f"{r['source']} stream {'paused' if expected else 'down'}: {r['reason'] or '?'}", level="info" if expected else "warn")
+                     f"{r['source']} stream {'paused' if expected else 'down'}: {r['reason'] or '?'}", level="info" if expected else "warn",
+                     src=r["source"], reason=r["reason"], expected=expected)
 
 
 TOKEN_SQL = "SELECT k.rowid rid, k.mint, k.symbol, k.name, k.creator, k.first_seen_at, k.initial_buy_lamports, k.is_mayhem_mode FROM tokens k"

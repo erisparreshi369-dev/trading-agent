@@ -1,0 +1,1081 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-21T00:21:23+00:00",
+  "title": "Design System: trading-agent",
+  "extensions": {
+    "colorMeta": {
+      "ground": {
+        "role": "neutral",
+        "displayName": "Icy Periwinkle",
+        "canonical": "#E7ECFF",
+        "tonalRamp": [
+          "oklch(15% 0.007 274.1)",
+          "oklch(26% 0.011 274.1)",
+          "oklch(37% 0.017 274.1)",
+          "oklch(48% 0.023 274.1)",
+          "oklch(60% 0.024 274.1)",
+          "oklch(72% 0.017 274.1)",
+          "oklch(84% 0.011 274.1)",
+          "oklch(95% 0.007 274.1)"
+        ]
+      },
+      "ground-glow-lilac": {
+        "role": "neutral",
+        "displayName": "Lilac Glow",
+        "canonical": "#E8C8FF",
+        "tonalRamp": [
+          "oklch(15% 0.020 310.9)",
+          "oklch(26% 0.034 310.9)",
+          "oklch(37% 0.052 310.9)",
+          "oklch(48% 0.070 310.9)",
+          "oklch(60% 0.074 310.9)",
+          "oklch(72% 0.054 310.9)",
+          "oklch(84% 0.034 310.9)",
+          "oklch(95% 0.020 310.9)"
+        ]
+      },
+      "ground-glow-sky": {
+        "role": "neutral",
+        "displayName": "Sky Glow",
+        "canonical": "#B5EBFF",
+        "tonalRamp": [
+          "oklch(15% 0.015 222.6)",
+          "oklch(26% 0.026 222.6)",
+          "oklch(37% 0.039 222.6)",
+          "oklch(48% 0.053 222.6)",
+          "oklch(60% 0.055 222.6)",
+          "oklch(72% 0.041 222.6)",
+          "oklch(84% 0.026 222.6)",
+          "oklch(95% 0.015 222.6)"
+        ]
+      },
+      "ground-glow-blush": {
+        "role": "neutral",
+        "displayName": "Blush Glow",
+        "canonical": "#FFE3F1",
+        "tonalRamp": [
+          "oklch(15% 0.009 346.1)",
+          "oklch(26% 0.015 346.1)",
+          "oklch(37% 0.023 346.1)",
+          "oklch(48% 0.031 346.1)",
+          "oklch(60% 0.032 346.1)",
+          "oklch(72% 0.023 346.1)",
+          "oklch(84% 0.015 346.1)",
+          "oklch(95% 0.009 346.1)"
+        ]
+      },
+      "panel": {
+        "role": "neutral",
+        "displayName": "Frost",
+        "canonical": "rgba(255, 255, 255, .58)",
+        "note": "Translucent panel fill; always paired with a 14px backdrop blur."
+      },
+      "panel-solid": {
+        "role": "neutral",
+        "displayName": "Frost Solid",
+        "canonical": "#F8F9FF",
+        "tonalRamp": [
+          "oklch(15% 0.002 278.6)",
+          "oklch(26% 0.003 278.6)",
+          "oklch(37% 0.005 278.6)",
+          "oklch(48% 0.007 278.6)",
+          "oklch(60% 0.007 278.6)",
+          "oklch(72% 0.005 278.6)",
+          "oklch(84% 0.003 278.6)",
+          "oklch(95% 0.002 278.6)"
+        ]
+      },
+      "line": {
+        "role": "neutral",
+        "displayName": "Periwinkle Line",
+        "canonical": "#CBD3F7",
+        "tonalRamp": [
+          "oklch(15% 0.013 275.4)",
+          "oklch(26% 0.021 275.4)",
+          "oklch(37% 0.032 275.4)",
+          "oklch(48% 0.043 275.4)",
+          "oklch(60% 0.045 275.4)",
+          "oklch(72% 0.033 275.4)",
+          "oklch(84% 0.021 275.4)",
+          "oklch(95% 0.013 275.4)"
+        ]
+      },
+      "line-soft": {
+        "role": "neutral",
+        "displayName": "Soft Line",
+        "canonical": "#E1E6FB",
+        "tonalRamp": [
+          "oklch(15% 0.007 275.1)",
+          "oklch(26% 0.012 275.1)",
+          "oklch(37% 0.019 275.1)",
+          "oklch(48% 0.025 275.1)",
+          "oklch(60% 0.026 275.1)",
+          "oklch(72% 0.019 275.1)",
+          "oklch(84% 0.012 275.1)",
+          "oklch(95% 0.007 275.1)"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Midnight Ink",
+        "canonical": "#15163A",
+        "tonalRamp": [
+          "oklch(15% 0.017 278.1)",
+          "oklch(26% 0.029 278.1)",
+          "oklch(37% 0.044 278.1)",
+          "oklch(48% 0.059 278.1)",
+          "oklch(60% 0.061 278.1)",
+          "oklch(72% 0.045 278.1)",
+          "oklch(84% 0.029 278.1)",
+          "oklch(95% 0.017 278.1)"
+        ]
+      },
+      "ink-soft": {
+        "role": "neutral",
+        "displayName": "Dusk Ink",
+        "canonical": "#474C7C",
+        "tonalRamp": [
+          "oklch(15% 0.020 278.0)",
+          "oklch(26% 0.033 278.0)",
+          "oklch(37% 0.051 278.0)",
+          "oklch(48% 0.068 278.0)",
+          "oklch(60% 0.071 278.0)",
+          "oklch(72% 0.052 278.0)",
+          "oklch(84% 0.033 278.0)",
+          "oklch(95% 0.020 278.0)"
+        ]
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "Lavender Grey",
+        "canonical": "#62679A",
+        "tonalRamp": [
+          "oklch(15% 0.020 279.0)",
+          "oklch(26% 0.034 279.0)",
+          "oklch(37% 0.051 279.0)",
+          "oklch(48% 0.069 279.0)",
+          "oklch(60% 0.072 279.0)",
+          "oklch(72% 0.053 279.0)",
+          "oklch(84% 0.034 279.0)",
+          "oklch(95% 0.020 279.0)"
+        ]
+      },
+      "grape": {
+        "role": "primary",
+        "displayName": "Grape",
+        "canonical": "#5B3DF0",
+        "tonalRamp": [
+          "oklch(15% 0.062 280.8)",
+          "oklch(26% 0.105 280.8)",
+          "oklch(37% 0.160 280.8)",
+          "oklch(48% 0.214 280.8)",
+          "oklch(60% 0.224 280.8)",
+          "oklch(72% 0.165 280.8)",
+          "oklch(84% 0.105 280.8)",
+          "oklch(95% 0.062 280.8)"
+        ]
+      },
+      "grape-deep": {
+        "role": "primary",
+        "displayName": "Deep Grape",
+        "canonical": "#4A2FD6",
+        "tonalRamp": [
+          "oklch(15% 0.059 279.3)",
+          "oklch(26% 0.099 279.3)",
+          "oklch(37% 0.151 279.3)",
+          "oklch(48% 0.202 279.3)",
+          "oklch(60% 0.212 279.3)",
+          "oklch(72% 0.155 279.3)",
+          "oklch(84% 0.099 279.3)",
+          "oklch(95% 0.059 279.3)"
+        ]
+      },
+      "grape-soft": {
+        "role": "primary",
+        "displayName": "Grape Mist",
+        "canonical": "#ECE8FF",
+        "tonalRamp": [
+          "oklch(15% 0.008 293.8)",
+          "oklch(26% 0.013 293.8)",
+          "oklch(37% 0.020 293.8)",
+          "oklch(48% 0.027 293.8)",
+          "oklch(60% 0.028 293.8)",
+          "oklch(72% 0.021 293.8)",
+          "oklch(84% 0.013 293.8)",
+          "oklch(95% 0.008 293.8)"
+        ]
+      },
+      "on-grape": {
+        "role": "neutral",
+        "displayName": "On Grape White",
+        "canonical": "#FFFFFF",
+        "tonalRamp": [
+          "oklch(15% 0.000 89.9)",
+          "oklch(26% 0.000 89.9)",
+          "oklch(37% 0.000 89.9)",
+          "oklch(48% 0.000 89.9)",
+          "oklch(60% 0.000 89.9)",
+          "oklch(72% 0.000 89.9)",
+          "oklch(84% 0.000 89.9)",
+          "oklch(95% 0.000 89.9)"
+        ]
+      },
+      "lime": {
+        "role": "secondary",
+        "displayName": "Lime",
+        "canonical": "#B8F53A",
+        "tonalRamp": [
+          "oklch(15% 0.053 126.7)",
+          "oklch(26% 0.089 126.7)",
+          "oklch(37% 0.136 126.7)",
+          "oklch(48% 0.183 126.7)",
+          "oklch(60% 0.191 126.7)",
+          "oklch(72% 0.140 126.7)",
+          "oklch(84% 0.089 126.7)",
+          "oklch(95% 0.053 126.7)"
+        ]
+      },
+      "screen": {
+        "role": "secondary",
+        "displayName": "Aqua Screen",
+        "canonical": "#D6F8F3",
+        "tonalRamp": [
+          "oklch(15% 0.009 185.8)",
+          "oklch(26% 0.015 185.8)",
+          "oklch(37% 0.023 185.8)",
+          "oklch(48% 0.031 185.8)",
+          "oklch(60% 0.032 185.8)",
+          "oklch(72% 0.024 185.8)",
+          "oklch(84% 0.015 185.8)",
+          "oklch(95% 0.009 185.8)"
+        ]
+      },
+      "screen-line": {
+        "role": "secondary",
+        "displayName": "Aqua Screen Edge",
+        "canonical": "#9FE3D9",
+        "tonalRamp": [
+          "oklch(15% 0.017 184.6)",
+          "oklch(26% 0.029 184.6)",
+          "oklch(37% 0.045 184.6)",
+          "oklch(48% 0.060 184.6)",
+          "oklch(60% 0.063 184.6)",
+          "oklch(72% 0.046 184.6)",
+          "oklch(84% 0.029 184.6)",
+          "oklch(95% 0.017 184.6)"
+        ]
+      },
+      "screen-ink": {
+        "role": "secondary",
+        "displayName": "Aqua Screen Ink",
+        "canonical": "#0D5951",
+        "tonalRamp": [
+          "oklch(15% 0.017 183.9)",
+          "oklch(26% 0.029 183.9)",
+          "oklch(37% 0.045 183.9)",
+          "oklch(48% 0.060 183.9)",
+          "oklch(60% 0.063 183.9)",
+          "oklch(72% 0.046 183.9)",
+          "oklch(84% 0.029 183.9)",
+          "oklch(95% 0.017 183.9)"
+        ]
+      },
+      "sun": {
+        "role": "tertiary",
+        "displayName": "Sun-Yellow",
+        "canonical": "#F5B20F",
+        "tonalRamp": [
+          "oklch(15% 0.041 80.8)",
+          "oklch(26% 0.069 80.8)",
+          "oklch(37% 0.105 80.8)",
+          "oklch(48% 0.141 80.8)",
+          "oklch(60% 0.148 80.8)",
+          "oklch(72% 0.108 80.8)",
+          "oklch(84% 0.069 80.8)",
+          "oklch(95% 0.041 80.8)"
+        ]
+      },
+      "sun-ink": {
+        "role": "tertiary",
+        "displayName": "Sun Ink",
+        "canonical": "#7A5600",
+        "tonalRamp": [
+          "oklch(15% 0.025 80.4)",
+          "oklch(26% 0.042 80.4)",
+          "oklch(37% 0.063 80.4)",
+          "oklch(48% 0.085 80.4)",
+          "oklch(60% 0.089 80.4)",
+          "oklch(72% 0.065 80.4)",
+          "oklch(84% 0.042 80.4)",
+          "oklch(95% 0.025 80.4)"
+        ]
+      },
+      "sun-soft": {
+        "role": "tertiary",
+        "displayName": "Sun Wash",
+        "canonical": "#FFF6D6",
+        "tonalRamp": [
+          "oklch(15% 0.011 94.1)",
+          "oklch(26% 0.018 94.1)",
+          "oklch(37% 0.027 94.1)",
+          "oklch(48% 0.037 94.1)",
+          "oklch(60% 0.038 94.1)",
+          "oklch(72% 0.028 94.1)",
+          "oklch(84% 0.018 94.1)",
+          "oklch(95% 0.011 94.1)"
+        ]
+      },
+      "sun-line": {
+        "role": "tertiary",
+        "displayName": "Sun Edge",
+        "canonical": "#EED98C",
+        "tonalRamp": [
+          "oklch(15% 0.025 94.7)",
+          "oklch(26% 0.042 94.7)",
+          "oklch(37% 0.064 94.7)",
+          "oklch(48% 0.085 94.7)",
+          "oklch(60% 0.089 94.7)",
+          "oklch(72% 0.066 94.7)",
+          "oklch(84% 0.042 94.7)",
+          "oklch(95% 0.025 94.7)"
+        ]
+      },
+      "win": {
+        "role": "neutral",
+        "displayName": "Win Green",
+        "canonical": "#0A8A5E",
+        "tonalRamp": [
+          "oklch(15% 0.030 161.8)",
+          "oklch(26% 0.051 161.8)",
+          "oklch(37% 0.078 161.8)",
+          "oklch(48% 0.104 161.8)",
+          "oklch(60% 0.109 161.8)",
+          "oklch(72% 0.080 161.8)",
+          "oklch(84% 0.051 161.8)",
+          "oklch(95% 0.030 161.8)"
+        ]
+      },
+      "win-soft": {
+        "role": "neutral",
+        "displayName": "Win Wash",
+        "canonical": "#DDF6EA",
+        "tonalRamp": [
+          "oklch(15% 0.008 165.3)",
+          "oklch(26% 0.013 165.3)",
+          "oklch(37% 0.020 165.3)",
+          "oklch(48% 0.026 165.3)",
+          "oklch(60% 0.028 165.3)",
+          "oklch(72% 0.020 165.3)",
+          "oklch(84% 0.013 165.3)",
+          "oklch(95% 0.008 165.3)"
+        ]
+      },
+      "loss": {
+        "role": "neutral",
+        "displayName": "Loss Red",
+        "canonical": "#D2353C",
+        "tonalRamp": [
+          "oklch(15% 0.048 23.6)",
+          "oklch(26% 0.081 23.6)",
+          "oklch(37% 0.124 23.6)",
+          "oklch(48% 0.166 23.6)",
+          "oklch(60% 0.174 23.6)",
+          "oklch(72% 0.127 23.6)",
+          "oklch(84% 0.081 23.6)",
+          "oklch(95% 0.048 23.6)"
+        ]
+      },
+      "loss-soft": {
+        "role": "neutral",
+        "displayName": "Loss Wash",
+        "canonical": "#FCE0E1",
+        "tonalRamp": [
+          "oklch(15% 0.008 15.3)",
+          "oklch(26% 0.013 15.3)",
+          "oklch(37% 0.020 15.3)",
+          "oklch(48% 0.027 15.3)",
+          "oklch(60% 0.028 15.3)",
+          "oklch(72% 0.020 15.3)",
+          "oklch(84% 0.013 15.3)",
+          "oklch(95% 0.008 15.3)"
+        ]
+      },
+      "bubblegum": {
+        "role": "tertiary",
+        "displayName": "Bubblegum",
+        "canonical": "#E0408E",
+        "tonalRamp": [
+          "oklch(15% 0.052 355.1)",
+          "oklch(26% 0.087 355.1)",
+          "oklch(37% 0.132 355.1)",
+          "oklch(48% 0.178 355.1)",
+          "oklch(60% 0.186 355.1)",
+          "oklch(72% 0.136 355.1)",
+          "oklch(84% 0.087 355.1)",
+          "oklch(95% 0.052 355.1)"
+        ]
+      },
+      "blue": {
+        "role": "tertiary",
+        "displayName": "Trader Blue",
+        "canonical": "#2F6BFF",
+        "tonalRamp": [
+          "oklch(15% 0.057 263.9)",
+          "oklch(26% 0.096 263.9)",
+          "oklch(37% 0.147 263.9)",
+          "oklch(48% 0.197 263.9)",
+          "oklch(60% 0.206 263.9)",
+          "oklch(72% 0.151 263.9)",
+          "oklch(84% 0.096 263.9)",
+          "oklch(95% 0.057 263.9)"
+        ]
+      },
+      "online": {
+        "role": "neutral",
+        "displayName": "Online Green",
+        "canonical": "#18A866",
+        "tonalRamp": [
+          "oklch(15% 0.038 156.2)",
+          "oklch(26% 0.063 156.2)",
+          "oklch(37% 0.096 156.2)",
+          "oklch(48% 0.129 156.2)",
+          "oklch(60% 0.135 156.2)",
+          "oklch(72% 0.099 156.2)",
+          "oklch(84% 0.063 156.2)",
+          "oklch(95% 0.038 156.2)"
+        ]
+      },
+      "idle": {
+        "role": "neutral",
+        "displayName": "Idle Amber",
+        "canonical": "#E89B00",
+        "tonalRamp": [
+          "oklch(15% 0.040 73.7)",
+          "oklch(26% 0.067 73.7)",
+          "oklch(37% 0.102 73.7)",
+          "oklch(48% 0.136 73.7)",
+          "oklch(60% 0.143 73.7)",
+          "oklch(72% 0.105 73.7)",
+          "oklch(84% 0.067 73.7)",
+          "oklch(95% 0.040 73.7)"
+        ]
+      },
+      "away": {
+        "role": "neutral",
+        "displayName": "Away Grey",
+        "canonical": "#A5ABCF",
+        "tonalRamp": [
+          "oklch(15% 0.013 277.6)",
+          "oklch(26% 0.022 277.6)",
+          "oklch(37% 0.033 277.6)",
+          "oklch(48% 0.045 277.6)",
+          "oklch(60% 0.047 277.6)",
+          "oklch(72% 0.034 277.6)",
+          "oklch(84% 0.022 277.6)",
+          "oklch(95% 0.013 277.6)"
+        ]
+      },
+      "night-ground": {
+        "role": "neutral",
+        "displayName": "Night Icy Periwinkle",
+        "canonical": "#121130",
+        "tonalRamp": [
+          "oklch(15% 0.015 280.9)",
+          "oklch(26% 0.025 280.9)",
+          "oklch(37% 0.038 280.9)",
+          "oklch(48% 0.052 280.9)",
+          "oklch(60% 0.054 280.9)",
+          "oklch(72% 0.040 280.9)",
+          "oklch(84% 0.025 280.9)",
+          "oklch(95% 0.015 280.9)"
+        ]
+      },
+      "night-panel": {
+        "role": "neutral",
+        "displayName": "Night Frost",
+        "canonical": "rgba(31, 29, 74, .88)",
+        "note": "Translucent panel fill; always paired with a 14px backdrop blur."
+      },
+      "night-panel-solid": {
+        "role": "neutral",
+        "displayName": "Night Frost Solid",
+        "canonical": "#1F1D4A",
+        "tonalRamp": [
+          "oklch(15% 0.020 281.2)",
+          "oklch(26% 0.034 281.2)",
+          "oklch(37% 0.052 281.2)",
+          "oklch(48% 0.070 281.2)",
+          "oklch(60% 0.073 281.2)",
+          "oklch(72% 0.054 281.2)",
+          "oklch(84% 0.034 281.2)",
+          "oklch(95% 0.020 281.2)"
+        ]
+      },
+      "night-line": {
+        "role": "neutral",
+        "displayName": "Night Periwinkle Line",
+        "canonical": "#34317A",
+        "tonalRamp": [
+          "oklch(15% 0.030 280.3)",
+          "oklch(26% 0.051 280.3)",
+          "oklch(37% 0.077 280.3)",
+          "oklch(48% 0.104 280.3)",
+          "oklch(60% 0.108 280.3)",
+          "oklch(72% 0.080 280.3)",
+          "oklch(84% 0.051 280.3)",
+          "oklch(95% 0.030 280.3)"
+        ]
+      },
+      "night-line-soft": {
+        "role": "neutral",
+        "displayName": "Night Soft Line",
+        "canonical": "#2A2862",
+        "tonalRamp": [
+          "oklch(15% 0.025 280.5)",
+          "oklch(26% 0.042 280.5)",
+          "oklch(37% 0.064 280.5)",
+          "oklch(48% 0.086 280.5)",
+          "oklch(60% 0.090 280.5)",
+          "oklch(72% 0.066 280.5)",
+          "oklch(84% 0.042 280.5)",
+          "oklch(95% 0.025 280.5)"
+        ]
+      },
+      "night-ink": {
+        "role": "neutral",
+        "displayName": "Night Midnight Ink",
+        "canonical": "#F0F1FF",
+        "tonalRamp": [
+          "oklch(15% 0.005 282.8)",
+          "oklch(26% 0.008 282.8)",
+          "oklch(37% 0.012 282.8)",
+          "oklch(48% 0.016 282.8)",
+          "oklch(60% 0.017 282.8)",
+          "oklch(72% 0.012 282.8)",
+          "oklch(84% 0.008 282.8)",
+          "oklch(95% 0.005 282.8)"
+        ]
+      },
+      "night-ink-soft": {
+        "role": "neutral",
+        "displayName": "Night Dusk Ink",
+        "canonical": "#C0C3EE",
+        "tonalRamp": [
+          "oklch(15% 0.015 281.9)",
+          "oklch(26% 0.025 281.9)",
+          "oklch(37% 0.039 281.9)",
+          "oklch(48% 0.052 281.9)",
+          "oklch(60% 0.054 281.9)",
+          "oklch(72% 0.040 281.9)",
+          "oklch(84% 0.025 281.9)",
+          "oklch(95% 0.015 281.9)"
+        ]
+      },
+      "night-muted": {
+        "role": "neutral",
+        "displayName": "Night Lavender Grey",
+        "canonical": "#ABAFE0",
+        "tonalRamp": [
+          "oklch(15% 0.018 281.0)",
+          "oklch(26% 0.029 281.0)",
+          "oklch(37% 0.045 281.0)",
+          "oklch(48% 0.060 281.0)",
+          "oklch(60% 0.063 281.0)",
+          "oklch(72% 0.046 281.0)",
+          "oklch(84% 0.029 281.0)",
+          "oklch(95% 0.018 281.0)"
+        ]
+      },
+      "night-grape": {
+        "role": "primary",
+        "displayName": "Night Grape",
+        "canonical": "#4029C2",
+        "tonalRamp": [
+          "oklch(15% 0.055 278.4)",
+          "oklch(26% 0.092 278.4)",
+          "oklch(37% 0.141 278.4)",
+          "oklch(48% 0.189 278.4)",
+          "oklch(60% 0.198 278.4)",
+          "oklch(72% 0.145 278.4)",
+          "oklch(84% 0.092 278.4)",
+          "oklch(95% 0.055 278.4)"
+        ]
+      },
+      "night-grape-deep": {
+        "role": "primary",
+        "displayName": "Night Deep Grape",
+        "canonical": "#6A4EFF",
+        "tonalRamp": [
+          "oklch(15% 0.062 282.2)",
+          "oklch(26% 0.104 282.2)",
+          "oklch(37% 0.158 282.2)",
+          "oklch(48% 0.213 282.2)",
+          "oklch(60% 0.223 282.2)",
+          "oklch(72% 0.163 282.2)",
+          "oklch(84% 0.104 282.2)",
+          "oklch(95% 0.062 282.2)"
+        ]
+      },
+      "night-grape-soft": {
+        "role": "primary",
+        "displayName": "Night Grape Mist",
+        "canonical": "#2B2670",
+        "tonalRamp": [
+          "oklch(15% 0.031 280.0)",
+          "oklch(26% 0.052 280.0)",
+          "oklch(37% 0.079 280.0)",
+          "oklch(48% 0.106 280.0)",
+          "oklch(60% 0.111 280.0)",
+          "oklch(72% 0.081 280.0)",
+          "oklch(84% 0.052 280.0)",
+          "oklch(95% 0.031 280.0)"
+        ]
+      },
+      "night-screen": {
+        "role": "secondary",
+        "displayName": "Night Aqua Screen",
+        "canonical": "#0E3A40",
+        "tonalRamp": [
+          "oklch(15% 0.012 208.1)",
+          "oklch(26% 0.020 208.1)",
+          "oklch(37% 0.030 208.1)",
+          "oklch(48% 0.041 208.1)",
+          "oklch(60% 0.043 208.1)",
+          "oklch(72% 0.031 208.1)",
+          "oklch(84% 0.020 208.1)",
+          "oklch(95% 0.012 208.1)"
+        ]
+      },
+      "night-screen-line": {
+        "role": "secondary",
+        "displayName": "Night Aqua Screen Edge",
+        "canonical": "#1D6067",
+        "tonalRamp": [
+          "oklch(15% 0.017 205.1)",
+          "oklch(26% 0.028 205.1)",
+          "oklch(37% 0.042 205.1)",
+          "oklch(48% 0.057 205.1)",
+          "oklch(60% 0.059 205.1)",
+          "oklch(72% 0.044 205.1)",
+          "oklch(84% 0.028 205.1)",
+          "oklch(95% 0.017 205.1)"
+        ]
+      },
+      "night-screen-ink": {
+        "role": "secondary",
+        "displayName": "Night Aqua Screen Ink",
+        "canonical": "#A6F3E8",
+        "tonalRamp": [
+          "oklch(15% 0.019 184.8)",
+          "oklch(26% 0.032 184.8)",
+          "oklch(37% 0.049 184.8)",
+          "oklch(48% 0.066 184.8)",
+          "oklch(60% 0.070 184.8)",
+          "oklch(72% 0.051 184.8)",
+          "oklch(84% 0.032 184.8)",
+          "oklch(95% 0.019 184.8)"
+        ]
+      },
+      "night-sun-ink": {
+        "role": "tertiary",
+        "displayName": "Night Sun Ink",
+        "canonical": "#FFD36B",
+        "tonalRamp": [
+          "oklch(15% 0.033 86.6)",
+          "oklch(26% 0.055 86.6)",
+          "oklch(37% 0.084 86.6)",
+          "oklch(48% 0.113 86.6)",
+          "oklch(60% 0.119 86.6)",
+          "oklch(72% 0.087 86.6)",
+          "oklch(84% 0.055 86.6)",
+          "oklch(95% 0.033 86.6)"
+        ]
+      },
+      "night-sun-soft": {
+        "role": "tertiary",
+        "displayName": "Night Sun Wash",
+        "canonical": "#352B0E",
+        "tonalRamp": [
+          "oklch(15% 0.012 90.2)",
+          "oklch(26% 0.019 90.2)",
+          "oklch(37% 0.030 90.2)",
+          "oklch(48% 0.040 90.2)",
+          "oklch(60% 0.042 90.2)",
+          "oklch(72% 0.031 90.2)",
+          "oklch(84% 0.019 90.2)",
+          "oklch(95% 0.012 90.2)"
+        ]
+      },
+      "night-win": {
+        "role": "neutral",
+        "displayName": "Night Win Green",
+        "canonical": "#3FD69A",
+        "tonalRamp": [
+          "oklch(15% 0.038 162.1)",
+          "oklch(26% 0.064 162.1)",
+          "oklch(37% 0.098 162.1)",
+          "oklch(48% 0.131 162.1)",
+          "oklch(60% 0.138 162.1)",
+          "oklch(72% 0.101 162.1)",
+          "oklch(84% 0.064 162.1)",
+          "oklch(95% 0.038 162.1)"
+        ]
+      },
+      "night-win-soft": {
+        "role": "neutral",
+        "displayName": "Night Win Wash",
+        "canonical": "#123A2C",
+        "tonalRamp": [
+          "oklch(15% 0.013 166.9)",
+          "oklch(26% 0.022 166.9)",
+          "oklch(37% 0.033 166.9)",
+          "oklch(48% 0.044 166.9)",
+          "oklch(60% 0.047 166.9)",
+          "oklch(72% 0.034 166.9)",
+          "oklch(84% 0.022 166.9)",
+          "oklch(95% 0.013 166.9)"
+        ]
+      },
+      "night-loss": {
+        "role": "neutral",
+        "displayName": "Night Loss Red",
+        "canonical": "#FF7378",
+        "tonalRamp": [
+          "oklch(15% 0.043 20.2)",
+          "oklch(26% 0.072 20.2)",
+          "oklch(37% 0.109 20.2)",
+          "oklch(48% 0.147 20.2)",
+          "oklch(60% 0.154 20.2)",
+          "oklch(72% 0.113 20.2)",
+          "oklch(84% 0.072 20.2)",
+          "oklch(95% 0.043 20.2)"
+        ]
+      },
+      "night-loss-soft": {
+        "role": "neutral",
+        "displayName": "Night Loss Wash",
+        "canonical": "#46191E",
+        "tonalRamp": [
+          "oklch(15% 0.017 15.9)",
+          "oklch(26% 0.029 15.9)",
+          "oklch(37% 0.044 15.9)",
+          "oklch(48% 0.060 15.9)",
+          "oklch(60% 0.062 15.9)",
+          "oklch(72% 0.046 15.9)",
+          "oklch(84% 0.029 15.9)",
+          "oklch(95% 0.017 15.9)"
+        ]
+      },
+      "night-bubblegum": {
+        "role": "tertiary",
+        "displayName": "Night Bubblegum",
+        "canonical": "#FF7AB8",
+        "tonalRamp": [
+          "oklch(15% 0.044 352.9)",
+          "oklch(26% 0.073 352.9)",
+          "oklch(37% 0.111 352.9)",
+          "oklch(48% 0.150 352.9)",
+          "oklch(60% 0.157 352.9)",
+          "oklch(72% 0.115 352.9)",
+          "oklch(84% 0.073 352.9)",
+          "oklch(95% 0.044 352.9)"
+        ]
+      },
+      "night-blue": {
+        "role": "tertiary",
+        "displayName": "Night Trader Blue",
+        "canonical": "#7EA2FF",
+        "tonalRamp": [
+          "oklch(15% 0.035 266.9)",
+          "oklch(26% 0.059 266.9)",
+          "oklch(37% 0.091 266.9)",
+          "oklch(48% 0.122 266.9)",
+          "oklch(60% 0.127 266.9)",
+          "oklch(72% 0.093 266.9)",
+          "oklch(84% 0.059 266.9)",
+          "oklch(95% 0.035 266.9)"
+        ]
+      },
+      "night-away": {
+        "role": "neutral",
+        "displayName": "Night Away Grey",
+        "canonical": "#5E6296",
+        "tonalRamp": [
+          "oklch(15% 0.021 279.7)",
+          "oklch(26% 0.034 279.7)",
+          "oklch(37% 0.053 279.7)",
+          "oklch(48% 0.071 279.7)",
+          "oklch(60% 0.074 279.7)",
+          "oklch(72% 0.054 279.7)",
+          "oklch(84% 0.034 279.7)",
+          "oklch(95% 0.021 279.7)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Bag Figure",
+        "purpose": "The bag figure on the aqua screen only; 46px under 860px."
+      },
+      "wordmark": {
+        "displayName": "Wordmark",
+        "purpose": "The app name in the title bar."
+      },
+      "badge": {
+        "displayName": "Mode Badge",
+        "purpose": "PAPER / LIVE badge."
+      },
+      "headline": {
+        "displayName": "Panel Title",
+        "purpose": "Panel titles; the away message sentence at the same size, regular weight."
+      },
+      "title": {
+        "displayName": "Sub-head",
+        "purpose": "Sub-heads inside panels, Dusk Ink."
+      },
+      "figure-small": {
+        "displayName": "Stat Value",
+        "purpose": "Stat values under the bag screen."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Default text."
+      },
+      "body-table": {
+        "displayName": "Table Body",
+        "purpose": "Tables, lists, key/value rows."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Stat labels, table headers, panel asides, pills, chips (muted)."
+      },
+      "caption": {
+        "displayName": "Caption",
+        "purpose": "Presence lines, part details, chat-log times."
+      },
+      "address": {
+        "displayName": "Address",
+        "purpose": "Wallet addresses and raw machine text only."
+      }
+    },
+    "shadows": [
+      {
+        "name": "candy-bevel",
+        "value": "inset 0 1px 0 #fff, inset 0 -3px 0 rgba(28, 32, 110, .07), 0 1px 2px rgba(28, 32, 110, .10), 0 14px 30px rgba(28, 32, 110, .12)",
+        "purpose": "Every frosted panel and the online away strip (light skin)."
+      },
+      {
+        "name": "candy-bevel-night",
+        "value": "inset 0 1px 0 rgba(255, 255, 255, .08), inset 0 -1px 0 rgba(0, 0, 0, .25), 0 10px 28px rgba(0, 0, 0, .35)",
+        "purpose": "The same role in the night skin."
+      },
+      {
+        "name": "titlebar-edge",
+        "value": "0 1px 0 rgba(0, 0, 0, .12)",
+        "purpose": "Hairline under the sticky title bar."
+      },
+      {
+        "name": "tooltip-lift",
+        "value": "0 8px 22px rgba(0, 0, 0, .18)",
+        "purpose": "Chart tooltips only."
+      },
+      {
+        "name": "panel-sheen",
+        "value": "linear-gradient(180deg, rgba(255, 255, 255, .55), rgba(255, 255, 255, 0) 38%)",
+        "purpose": "Gloss layered over the panel fill (night: .06 white)."
+      },
+      {
+        "name": "frost-blur",
+        "value": "backdrop-filter: blur(14px) saturate(1.3)",
+        "purpose": "Panels; the away strip uses blur(14px) when online."
+      }
+    ],
+    "motion": [
+      {
+        "name": "figure-flip",
+        "value": "0.6s cubic-bezier(.2, .8, .2, 1); translateY(-6px) and opacity .2 to rest",
+        "purpose": "The bag figure when its value changes."
+      },
+      {
+        "name": "nudge",
+        "value": "0.5s cubic-bezier(.36, .07, .19, .97); horizontal shake up to 6px",
+        "purpose": "One MSN-style nudge of the bag panel when a trade closes live."
+      },
+      {
+        "name": "arrive",
+        "value": "1.4s ease-out; grape-mist background fading to transparent",
+        "purpose": "New chat-log lines."
+      },
+      {
+        "name": "state-change",
+        "value": "0.15s",
+        "purpose": "Tab hover and selection, disclosure chevron rotation."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "prefers-reduced-motion: reduce disables flip, nudge and arrive",
+        "purpose": "Accessibility floor."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "rail-stacks",
+        "value": "1180px"
+      },
+      {
+        "name": "phone",
+        "value": "860px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Title Bar",
+      "kind": "nav",
+      "refersTo": "titlebar",
+      "description": "Sticky grape bar: lime PAPER badge, pixel wordmark, live dot, pill tabs.",
+      "html": "<header class=\"ds-titlebar\"><span class=\"ds-mode\">PAPER</span><span class=\"ds-appname\">trading-agent</span><span class=\"ds-conn\">live</span><nav class=\"ds-tabs\"><button class=\"ds-tab\" aria-selected=\"true\">home</button><button class=\"ds-tab\">buddies</button><button class=\"ds-tab\">the brain</button><button class=\"ds-tab\">nerd stuff</button></nav></header>",
+      "css": ".ds-titlebar{display:flex;align-items:center;gap:14px;height:48px;padding:0 16px;background:var(--grape,#5B3DF0);color:#fff;font:13px/1.45 Rubik,system-ui,sans-serif;box-shadow:0 1px 0 rgba(0,0,0,.12)} .ds-mode{font:700 13px/1 'Pixelify Sans',Rubik,monospace;letter-spacing:.06em;padding:5px 9px 4px;border-radius:7px;background:var(--lime,#B8F53A);color:#15163A} .ds-appname{font:700 17px/1 'Pixelify Sans',Rubik,monospace} .ds-conn{font-size:12px;color:rgba(255,255,255,.82)} .ds-conn::before{content:'';display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px;background:var(--lime,#B8F53A)} .ds-tabs{display:flex;gap:2px;margin-left:10px} .ds-tab{border:0;cursor:pointer;padding:6px 13px;border-radius:999px;background:transparent;color:rgba(255,255,255,.86);font:600 13px Rubik,system-ui,sans-serif;transition:background .15s,color .15s} .ds-tab:hover{background:rgba(255,255,255,.14);color:#fff} .ds-tab[aria-selected=true]{background:#fff;color:#4A2FD6} .ds-tab:focus-visible{outline:2px solid var(--lime,#B8F53A);outline-offset:2px}"
+    },
+    {
+      "name": "Away Message",
+      "kind": "custom",
+      "refersTo": "away-message",
+      "description": "The bot's status in one sentence with a pixel face and a state pill; sun when away.",
+      "html": "<section class=\"ds-away\"><svg class=\"ds-face\" viewBox=\"0 0 12 12\" shape-rendering=\"crispEdges\" aria-hidden=\"true\"><rect x=\"0\" y=\"1\" width=\"12\" height=\"10\" fill=\"#5B3DF0\"/><rect x=\"1\" y=\"0\" width=\"10\" height=\"12\" fill=\"#5B3DF0\"/><rect x=\"3\" y=\"5\" width=\"2\" height=\"1\" fill=\"#B8F53A\"/><rect x=\"7\" y=\"5\" width=\"2\" height=\"1\" fill=\"#B8F53A\"/><rect x=\"5\" y=\"8\" width=\"2\" height=\"1\" fill=\"#fff\"/></svg><div class=\"ds-away-text\"><p><b>away message:</b> brb, today's free data is used up</p><small>all parts vibing · nothing needs you</small></div><span class=\"ds-away-pill\">away till 02:00</span></section>",
+      "css": ".ds-away{display:flex;align-items:center;gap:12px;padding:8px 14px;border-radius:14px;background:var(--sun-soft,#FFF6D6);border:1px solid var(--sun-line,#EED98C);color:var(--ink,#15163A);font:13px/1.45 Rubik,system-ui,sans-serif} .ds-face{width:34px;height:34px;flex:none} .ds-away-text{flex:1;min-width:0} .ds-away-text p{margin:0;font-size:15px} .ds-away-text small{display:block;font-size:12px;color:var(--ink-2,#474C7C)} .ds-away-pill{margin-left:auto;font-weight:700;font-size:12px;padding:4px 11px;border-radius:999px;background:var(--sun,#F5B20F);color:#2B1E00}"
+    },
+    {
+      "name": "Frosted Panel",
+      "kind": "card",
+      "refersTo": "panel",
+      "description": "The one surface: sheen, translucent fill, 14px blur, candy bevel, grape header band.",
+      "html": "<article class=\"ds-panel\"><header class=\"ds-ph\"><h2>Is it OK?</h2><small>yep, all vibing</small></header><p class=\"ds-body\">Contents stay flat inside the frost.</p></article>",
+      "css": ".ds-panel{background:linear-gradient(180deg,rgba(255,255,255,.55),rgba(255,255,255,0) 38%),var(--panel,rgba(255,255,255,.58));border:1px solid var(--line,#CBD3F7);border-top-color:rgba(255,255,255,.95);border-radius:16px;box-shadow:inset 0 1px 0 #fff,inset 0 -3px 0 rgba(28,32,110,.07),0 1px 2px rgba(28,32,110,.10),0 14px 30px rgba(28,32,110,.12);padding:12px 14px;backdrop-filter:blur(14px) saturate(1.3);-webkit-backdrop-filter:blur(14px) saturate(1.3);color:var(--ink,#15163A);font:13px/1.45 Rubik,system-ui,sans-serif} .ds-ph{display:flex;align-items:baseline;gap:8px;margin:-12px -14px 10px;padding:9px 14px 8px;background:rgba(91,61,240,.06);border-bottom:1px solid var(--line-2,#E1E6FB);border-radius:16px 16px 0 0} .ds-ph h2{margin:0;font-size:15px;font-weight:700} .ds-ph small{font-size:12px;color:var(--muted,#62679A)} .ds-body{margin:0}"
+    },
+    {
+      "name": "Bag Screen",
+      "kind": "custom",
+      "refersTo": "bag-screen",
+      "description": "Aqua status screen: the pixel money figure, delta line and a step chart.",
+      "html": "<div class=\"ds-screen\"><div class=\"ds-figure\"><b>0.9772</b><span>SOL</span></div><p class=\"ds-delta\"><span class=\"ds-neg\">-0.0228 SOL all time · -2.3%</span> <span class=\"ds-mood\">· lowkey mid, not cooked</span></p><svg viewBox=\"0 0 300 70\" width=\"100%\" height=\"70\"><line x1=\"0\" x2=\"300\" y1=\"14\" y2=\"14\" stroke=\"#0D5951\" stroke-opacity=\".45\" stroke-dasharray=\"3 3\"/><path d=\"M0,14H20V30H50V44H90V56H300\" fill=\"none\" stroke=\"#15163A\" stroke-width=\"2\"/><circle cx=\"296\" cy=\"56\" r=\"4\" fill=\"#D2353C\" stroke=\"#D6F8F3\" stroke-width=\"2\"/></svg></div>",
+      "css": ".ds-screen{background:var(--screen,#D6F8F3);border:1px solid var(--screen-line,#9FE3D9);border-radius:12px;padding:10px 14px 4px;color:var(--ink,#15163A);font:13px/1.45 Rubik,system-ui,sans-serif} .ds-figure{display:flex;align-items:baseline;gap:8px} .ds-figure b{font:700 74px/1 'Pixelify Sans',Rubik,monospace;letter-spacing:-.01em} .ds-figure span{font-weight:700;font-size:16px;color:var(--ink-2,#474C7C)} .ds-delta{margin:4px 0 2px;font-weight:700;font-size:14px;font-variant-numeric:tabular-nums} .ds-neg{color:var(--l,#D2353C)} .ds-mood{font-weight:500;color:var(--ink-2,#474C7C)}"
+    },
+    {
+      "name": "Buddy Row",
+      "kind": "custom",
+      "refersTo": "buddy",
+      "description": "A trader as a buddy: pixel identicon sized by grade, mono address, presence dot.",
+      "html": "<div class=\"ds-buddy\"><svg class=\"ds-av\" width=\"40\" height=\"40\" viewBox=\"0 0 7 7\" shape-rendering=\"crispEdges\" aria-hidden=\"true\"><g fill=\"#2F6BFF\"><rect x=\"1\" y=\"1\" width=\"5\" height=\"1\"/><rect x=\"1\" y=\"2\" width=\"1\" height=\"3\"/><rect x=\"5\" y=\"2\" width=\"1\" height=\"3\"/><rect x=\"3\" y=\"2\" width=\"1\" height=\"2\"/><rect x=\"2\" y=\"5\" width=\"3\" height=\"1\"/></g></svg><span class=\"ds-who\"><b>4nDJ…tZ4s</b><small>online · 18s ago</small></span><span class=\"ds-ret\">+19.0%<small>copy return</small></span></div>",
+      "css": ".ds-buddy{display:flex;align-items:center;gap:10px;font:13px/1.45 Rubik,system-ui,sans-serif;color:var(--ink,#15163A)} .ds-av{flex:none;border-radius:22%;background:var(--panel-solid,#F8F9FF);box-shadow:0 0 0 1px var(--line,#CBD3F7)} .ds-who{display:grid;line-height:1.25;flex:1;min-width:0} .ds-who b{font:600 12.5px ui-monospace,'JetBrains Mono',monospace} .ds-who small{font-size:11.5px;color:var(--muted,#62679A)} .ds-who small::before{content:'';display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:5px;background:var(--online,#18A866)} .ds-ret{text-align:right;font-weight:700;color:var(--w,#0A8A5E);font-variant-numeric:tabular-nums;line-height:1.2} .ds-ret small{display:block;font-weight:500;font-size:11px;color:var(--muted,#62679A)}"
+    },
+    {
+      "name": "Chat Log Line",
+      "kind": "custom",
+      "refersTo": "feed",
+      "description": "Live tea: tabular time, coloured lowercase speaker tag with a colon, truncating text, hanging reasons.",
+      "html": "<ol class=\"ds-feed\"><li class=\"ds-ev\"><div class=\"ds-ev-head\"><span class=\"ds-tag ds-tag-bad\">skipped</span><span class=\"ds-ev-text\">skipped 4nDJ…tZ4s on $KIMCHI</span><span class=\"ds-ev-time\">02:14:19</span></div><ul><li>the creator made 10 coins in a day, that's giving scam</li></ul></li><li class=\"ds-ev\"><div class=\"ds-ev-head\"><span class=\"ds-tag ds-tag-buy\">trader buy</span><span class=\"ds-ev-text\">EUku…ziAo bought 0.4 SOL</span><span class=\"ds-ev-time\">02:12:40</span></div></li></ol>",
+      "css": ".ds-feed{list-style:none;margin:0;padding:0;font:13px/1.45 Rubik,system-ui,sans-serif;color:var(--ink,#15163A)} .ds-ev{padding:5px 2px;border-bottom:1px solid var(--line-2,#E1E6FB)} .ds-ev-head{display:grid;grid-template-columns:54px auto minmax(0,1fr);align-items:baseline;gap:6px;font-size:12.5px} .ds-ev-time{order:-1;color:var(--muted,#62679A);font-size:11.5px;font-variant-numeric:tabular-nums} .ds-tag{font-weight:700;font-size:11.5px;white-space:nowrap;text-transform:lowercase} .ds-tag::after{content:':'} .ds-tag-bad{color:var(--l,#D2353C)} .ds-tag-buy{color:var(--pink,#E0408E)} .ds-ev-text{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis} .ds-ev ul{margin:2px 0 0 60px;padding-left:14px;color:var(--ink-2,#474C7C);font-size:12px}"
+    },
+    {
+      "name": "Filter Chips",
+      "kind": "chip",
+      "refersTo": "filter-chip",
+      "description": "Chat-log filters: grape-mist pills with a faded count; pressed is solid deep grape.",
+      "html": "<div class=\"ds-filters\" role=\"toolbar\"><button class=\"ds-chip\" aria-pressed=\"true\">the tea<span>185</span></button><button class=\"ds-chip\" aria-pressed=\"false\">all<span>685</span></button><button class=\"ds-chip\" aria-pressed=\"false\">oopsies<span>62</span></button></div>",
+      "css": ".ds-filters{display:flex;gap:4px;flex-wrap:wrap} .ds-chip{cursor:pointer;font:500 12px Rubik,system-ui,sans-serif;color:var(--ink-2,#474C7C);background:var(--grape-soft,#ECE8FF);border:1px solid transparent;border-radius:999px;padding:2px 9px} .ds-chip span{margin-left:5px;opacity:.75;font-variant-numeric:tabular-nums} .ds-chip:hover{border-color:var(--line,#CBD3F7)} .ds-chip[aria-pressed=true]{background:var(--grape-2,#4A2FD6);color:#fff;font-weight:600} .ds-chip:focus-visible{outline:2px solid var(--grape-2,#4A2FD6);outline-offset:2px}"
+    },
+    {
+      "name": "Status Pills and Memory Tags",
+      "kind": "chip",
+      "refersTo": "pill",
+      "description": "Dot-led state pills (neutral, ok, warn, bad) and the brain's smaller memory tags.",
+      "html": "<div class=\"ds-row\"><span class=\"ds-pill\">just studying for now</span><span class=\"ds-pill ds-ok\">auto-skip ON</span><span class=\"ds-pill ds-warn\">lowkey sus</span><span class=\"ds-pill ds-bad\">down bad</span><span class=\"ds-mem\">new</span><span class=\"ds-mem ds-mem-ok\">locked in · 4 nights</span></div>",
+      "css": ".ds-row{display:flex;gap:6px;flex-wrap:wrap;align-items:center;font-family:Rubik,system-ui,sans-serif} .ds-pill{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:3px 10px;border-radius:999px;background:var(--grape-soft,#ECE8FF);color:var(--ink-2,#474C7C)} .ds-pill::before{content:'';width:7px;height:7px;border-radius:50%;background:var(--away,#A5ABCF)} .ds-ok{background:var(--w-soft,#DDF6EA);color:var(--w,#0A8A5E)} .ds-ok::before{background:var(--online,#18A866)} .ds-warn{background:var(--sun-soft,#FFF6D6);color:var(--sun-ink,#7A5600)} .ds-warn::before{background:var(--idle,#E89B00)} .ds-bad{background:var(--l-soft,#FCE0E1);color:var(--l,#D2353C)} .ds-bad::before{background:var(--l,#D2353C)} .ds-mem{font-size:10.5px;font-weight:700;letter-spacing:.03em;padding:1px 7px;border-radius:999px;background:var(--grape-soft,#ECE8FF);color:var(--grape-2,#4A2FD6)} .ds-mem-ok{background:var(--w-soft,#DDF6EA);color:var(--w,#0A8A5E)}"
+    },
+    {
+      "name": "Daily Limit Control",
+      "kind": "input",
+      "refersTo": "input-limit",
+      "description": "The only input: a number field with save (deep grape) and back-to-normal buttons.",
+      "html": "<div class=\"ds-ctl\"><h3>daily data limit</h3><input type=\"number\" value=\"1500\"><span class=\"ds-unit\">MB</span><button class=\"ds-save\">save</button><button class=\"ds-sec\">back to normal</button></div>",
+      "css": ".ds-ctl{display:flex;gap:6px;align-items:center;flex-wrap:wrap;font:13px/1.45 Rubik,system-ui,sans-serif;color:var(--ink,#15163A)} .ds-ctl h3{margin:0 4px 0 0;font-size:13px;font-weight:700} .ds-ctl input{width:92px;font:600 13px Rubik,system-ui,sans-serif;padding:5px 8px;border:1px solid var(--line,#CBD3F7);border-radius:9px;background:var(--panel-solid,#F8F9FF);color:var(--ink,#15163A);appearance:textfield;-moz-appearance:textfield} .ds-ctl input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0} .ds-ctl input:focus{outline:2px solid var(--grape-2,#4A2FD6);outline-offset:1px} .ds-unit{color:var(--muted,#62679A)} .ds-ctl button{cursor:pointer;font:600 12.5px Rubik,system-ui,sans-serif;padding:5px 12px;border-radius:9px;border:1px solid var(--line,#CBD3F7);background:var(--panel-solid,#F8F9FF);color:var(--ink,#15163A)} .ds-ctl .ds-save{background:var(--grape-2,#4A2FD6);border-color:var(--grape-2,#4A2FD6);color:#fff} .ds-ctl .ds-save:hover{background:var(--grape,#5B3DF0)} .ds-ctl button:focus-visible{outline:2px solid var(--grape-2,#4A2FD6);outline-offset:2px} .ds-ctl button:disabled{opacity:.45;cursor:default}"
+    },
+    {
+      "name": "Parts List",
+      "kind": "custom",
+      "refersTo": "parts",
+      "description": "Is it OK: LED, part name, coloured state word, time, truncating detail line.",
+      "html": "<ul class=\"ds-parts\"><li class=\"ds-part\"><i class=\"ds-led\"></i><b>trader</b><span class=\"ds-state\">vibing</span><em>pinged 11s ago</em><span class=\"ds-detail\">chances 4 · copied 0 · oopsies 0 this run</span></li><li class=\"ds-part ds-sched\"><i class=\"ds-led\"></i><b>the brain</b><span class=\"ds-state\">on schedule</span><em>score in 74s</em><span class=\"ds-detail\">weekly 20.3h ago · brain 47m ago</span></li></ul>",
+      "css": ".ds-parts{list-style:none;margin:0;padding:0;font:13px/1.45 Rubik,system-ui,sans-serif;color:var(--ink,#15163A)} .ds-part{display:grid;grid-template-columns:14px auto 1fr auto;align-items:center;gap:0 8px;padding:6px 0;border-bottom:1px solid var(--line-2,#E1E6FB)} .ds-part b{font-weight:600} .ds-led{width:9px;height:9px;border-radius:50%;background:var(--online,#18A866)} .ds-state{font-size:12px;font-weight:600;color:var(--w,#0A8A5E)} .ds-sched .ds-led{background:var(--grape-2,#4A2FD6)} .ds-sched .ds-state{color:var(--grape-2,#4A2FD6)} .ds-part em{font-style:normal;color:var(--muted,#62679A);font-size:12px;text-align:right} .ds-detail{grid-column:2/5;color:var(--muted,#62679A);font-size:11.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Bot Is Online",
+    "overview": "The dashboard is the bot's messenger window, circa 2003. The bot is a buddy who is online, idle or away; its status is one away message across the top; the traders it copies are its buddy list, each with a pixel buddy icon; what it is doing scrolls by as a chat log; and its money sits on an aqua status screen with a big pixel figure. It is the owner's own bot, never a trading terminal: no KPI tile row, no hero equity chart, no dark terminal.\n\nThe material is frosted candy. An icy periwinkle ground carries three soft colour glows (lilac top left, sky right, blush bottom); over it float translucent white panels with a sheen, a bright top edge and a soft drop, like early-2000s glossy UI made gentle. Colour is candy but every candy has a job: grape is the app's own chrome and actions, lime is the PAPER badge and the live dot, aqua is money, sun-yellow means away or waiting, green and red only ever mean won or lost and working or broken. The night skin keeps the same candy on a deep indigo ground.\n\nDensity is high but calm: everything a minute-long check needs fits a 1366×768 window, 13px Rubik body, 12px gaps. Loudness is reserved for state: the away strip turns yellow or red only when something is off, the bag gets one messenger-style nudge when a trade closes, and the rest stays still.",
+    "keyCharacteristics": [
+      "Grape title bar with a lime PAPER badge, pixel wordmark, live dot and pill tabs.",
+      "One full-width away message, coloured by the bot's state, with a 12×12 pixel face.",
+      "Frosted translucent panels (16px corners, 14px blur, inset bevel, soft drop) with a tinted header band.",
+      "An aqua bag screen holding the only display-size figure, in Pixelify Sans, above a step chart.",
+      "Pixel identicon buddy icons whose size follows the trader's grade; online, idle and away dots.",
+      "A chat-log feed in a sticky right rail on every tab: time, coloured lowercase speaker tag with a colon, text.",
+      "Same candy accents in the night skin; only ground, panels, ink and grape depth change."
+    ],
+    "rules": [
+      {
+        "name": "The Every Candy Has A Job Rule",
+        "body": "Grape is the app's chrome and its own actions, lime is mode and liveness, aqua is money, sun-yellow is away or waiting, bubblegum and blue are trader moves. A candy colour never appears as decoration outside its job.",
+        "section": "colors"
+      },
+      {
+        "name": "The Green Means Won Rule",
+        "body": "Win green and loss red mean money up or down, or a part working or broken. They are never used for branding, buttons or emphasis.",
+        "section": "colors"
+      },
+      {
+        "name": "The Same Candy At Night Rule",
+        "body": "The night skin changes ground, panels, lines, ink and grape depth only; the candy accents stay recognisably the same.",
+        "section": "colors"
+      },
+      {
+        "name": "The Pixel Is For Figures Rule",
+        "body": "Pixelify Sans appears on the bag figure, the wordmark and the mode badge only. It never sets a heading, a label or a sentence.",
+        "section": "typography"
+      },
+      {
+        "name": "The Tabular Money Rule",
+        "body": "Every number that can change (amounts, percentages, times, counts) uses tabular figures and right-aligns in tables.",
+        "section": "typography"
+      },
+      {
+        "name": "The One Layer Of Frost Rule",
+        "body": "Panels are the only frosted, shadowed layer. Nothing inside a panel gets its own drop shadow or blur.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Header Band Rule",
+        "body": "A panel's header sits on a faint grape band (6% grape; 4% white at night) with a soft-line bottom edge, flush to the panel's top corners.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do put the bot's state in the away message first: one sentence, a pixel face and a state pill, coloured sun when away, frost when online, loss-soft when it needs the owner.",
+      "Do keep money on the aqua screen with the pixel figure as the only display-size type on the page.",
+      "Do build every new surface as a frosted panel (16px corners, sheen, 14px blur, candy bevel) with a grape header band, and keep its contents flat.",
+      "Do give every trader a pixel identicon and a presence dot (online under 1 hour, idle under 24 hours, away beyond).",
+      "Do use Rubik with tabular figures for every number except the bag figure.",
+      "Do define colours as tokens and give each new token a night value; keep the candy accents unchanged at night.",
+      "Do keep motion to state changes (figure flip, one nudge per closed trade, new-line fade) and switch it off under reduced motion."
+    ],
+    "donts": [
+      "Don't add a KPI tile row, a hero equity chart or a dark trading-terminal look; stats are a divided list under the bag screen.",
+      "Don't use neon hype, flashing candles or casino effects (PRODUCT.md).",
+      "Don't set headings, labels or sentences in Pixelify Sans.",
+      "Don't use win green or loss red for anything except money up or down and parts working or broken.",
+      "Don't use aqua outside the bag screen.",
+      "Don't put walls of tables up front; long tables live on the details tab or scroll inside their panel.",
+      "Don't smooth or anti-alias the pixel art; faces and identicons render with crisp edges on an integer grid."
+    ]
+  }
+}

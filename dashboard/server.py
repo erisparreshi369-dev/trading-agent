@@ -2,7 +2,7 @@
 
 One poller thread owns the (read-only) database connection, keeps the latest snapshot and the
 recent feed in memory, and pushes changes to every browser over Server-Sent Events. Everything is
-read-only except POST /api/settings, which can change two daily limits (settings.py) and nothing
+read-only except POST /api/settings, which can change the owner's limits (settings.py) and nothing
 else. It answers only this dashboard's own page: the Host must be this machine, a cross-site
 Origin is refused, and the request must carry the page's secret token in a header (another site
 in your browser can neither read that token nor send that header).
@@ -29,7 +29,9 @@ import settings  # noqa: E402
 
 STATIC = Path(__file__).resolve().parent / "static"
 FILES = {"/": ("index.html", "text/html; charset=utf-8"), "/app.js": ("app.js", "text/javascript; charset=utf-8"),
-         "/style.css": ("style.css", "text/css; charset=utf-8")}
+         "/style.css": ("style.css", "text/css; charset=utf-8"),
+         "/genz.js": ("genz.js", "text/javascript; charset=utf-8"),
+         "/fonts/PixelifySans.woff2": ("fonts/PixelifySans.woff2", "font/woff2"), "/fonts/Rubik.woff2": ("fonts/Rubik.woff2", "font/woff2")}
 FEED_EVERY_S, SNAPSHOT_EVERY_S, SYSTEMD_EVERY_S = 1.0, 2.0, 5.0
 
 
@@ -52,7 +54,7 @@ class Hub:
     def state(self) -> str:
         with self.lock:
             return json.dumps({"snapshot": self.snapshot, "feed": self.feed.all() if self.feed else [], "error": self.error,
-                               "control_token": self.token})
+                               "control_token": self.token, "voice": data.voice()})
 
     def subscribe(self) -> tuple[queue.Queue, str]:
         q: queue.Queue = queue.Queue(maxsize=500)
@@ -150,7 +152,7 @@ def make_handler(hub: Hub):
         def do_HEAD(self):
             self.send(405, b"", "text/plain")
 
-        # Read-only, except the two limits in settings.py.
+        # Read-only, except the limits in settings.py (shared/editable-settings.json).
         do_PUT = do_PATCH = do_DELETE = do_HEAD
 
         def do_POST(self):
@@ -177,7 +179,7 @@ def make_handler(hub: Hub):
             except Exception as e:  # database busy etc.
                 log(f"settings change failed: {e}")
                 return self.reply(503, {"error": "could not save, try again"})
-            log(f"setting changed from the dashboard: {res['setting']} = {res['value']:g}" + ("" if res["overridden"] else " (back to normal)"))
+            log(f"setting changed from the dashboard: {res['setting']} = {res['text']}" + ("" if res["overridden"] else " (back to normal)"))
             self.reply(200, res)
 
         def reply(self, code: int, obj: dict):

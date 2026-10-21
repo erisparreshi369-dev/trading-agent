@@ -17,6 +17,7 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "shared"))
 import data  # noqa: E402
 import server  # noqa: E402
+import settings  # noqa: E402
 from migrate import connect, migrate  # noqa: E402
 
 NOW = 1_800_000_000_000
@@ -213,11 +214,11 @@ class DashboardServer(unittest.TestCase):
             code, res = post(raise_cap, origin=f"http://localhost:{port}")
             self.assertEqual((code, res["value"], res["overridden"]), (200, 4000, True))
             self.assertEqual(post({"setting": "madeonsol_stop_pct", "value": 100})[0], 200)
-            self.assertEqual(kv(), {"override.helius_daily_mb_cap": "4000", "override.madeonsol_stop_pct": "100.0"})
+            self.assertEqual(kv(), {"override.helius_daily_mb_cap": "4000", "override.madeonsol_stop_pct": "100"})
             # back to normal
             code, res = post({"setting": "helius_daily_mb_cap", "value": None})
             self.assertEqual((code, res["value"], res["overridden"]), (200, 1500, False))
-            self.assertEqual(kv(), {"override.madeonsol_stop_pct": "100.0"})
+            self.assertEqual(kv(), {"override.madeonsol_stop_pct": "100"})
             # every change is announced on Telegram (alerts outbox)
             notes = [json.loads(d) for (d,) in sqlite3.connect(path).execute("SELECT data FROM alerts WHERE kind = 'setting_changed' ORDER BY id")]
             self.assertEqual([(n["setting"], n["from"], n["to"], n["reset"]) for n in notes],
@@ -229,6 +230,65 @@ class DashboardServer(unittest.TestCase):
                 os.environ.pop("DB_PATH", None)
             else:
                 os.environ["DB_PATH"] = old_env
+            tmp.cleanup()
+
+    def test_every_limit_on_the_limits_tab(self):
+        tmp = tempfile.TemporaryDirectory()
+        path = Path(tmp.name) / "t.db"
+        seed(path)
+        kv = lambda: dict(sqlite3.connect(path).execute("SELECT key, value FROM kv WHERE key LIKE 'override.%'").fetchall())
+        try:
+            # every listed setting has a normal value, a range and words
+            for name, s in settings.SETTINGS.items():
+                d = settings.default(name)
+                self.assertIsInstance(settings.fmt(name, d), str)
+                if s["type"] != "bool":
+                    self.assertTrue(s["min"] <= d <= s["max"], f"{name}: normal value {d} outside its range")
+            self.assertEqual(settings.default("risk.STOP_LOSS_PCT"), 0.25)
+            self.assertEqual(settings.default("risk.TIME_EXIT_MS"), 1_800_000)
+            self.assertEqual(settings.default("signals.token_age_s.1"), 1800)
+            self.assertEqual(settings.default("collector.helius.steps_pct.2"), 95)
+            self.assertEqual(settings.default("madeonsol.candidates.watch_top"), 20)
+            self.assertIs(settings.default("signals.exclude_bad_creators"), False)
+            # trading safety: inside the walls only
+            res = settings.apply(path, "risk.STOP_LOSS_PCT", 0.15)
+            self.assertEqual((res["value"], res["overridden"], res["text"]), (0.15, True, "15%"))
+            with self.assertRaises(ValueError):
+                settings.apply(path, "risk.STOP_LOSS_PCT", 0.9)  # past the wall
+            with self.assertRaises(ValueError):
+                settings.apply(path, "risk.MAX_POSITION_SOL", 5)
+            with self.assertRaises(ValueError):
+                settings.apply(path, "risk.MAX_OPEN_POSITIONS", True)  # a number, not on/off
+            with self.assertRaises(ValueError):
+                settings.apply(path, "risk.PAPER_NO_LIMITS", 1)  # on/off only
+            settings.apply(path, "risk.PAPER_NO_LIMITS", False)
+            settings.apply(path, "risk.MAX_OPEN_POSITIONS", 7.4)  # whole numbers
+            # pair rules: min stays below max
+            with self.assertRaises(ValueError) as e:
+                settings.apply(path, "signals.token_age_s.0", 1800)
+            self.assertIn("must stay below", str(e.exception))
+            with self.assertRaises(ValueError):
+                settings.apply(path, "madeonsol_stop_pct", 60)  # warns at 70
+            settings.apply(path, "madeonsol.warn_pct", 50)
+            settings.apply(path, "madeonsol_stop_pct", 60)
+            with self.assertRaises(ValueError):
+                settings.apply(path, "madeonsol.warn_pct", None)  # back to 70 would pass the stop point
+            with self.assertRaises(ValueError):
+                settings.apply(path, "no.such.thing", 1)
+            self.assertEqual(kv(), {"override.risk.STOP_LOSS_PCT": "0.15", "override.risk.PAPER_NO_LIMITS": "0", "override.risk.MAX_OPEN_POSITIONS": "7",
+                                    "override.madeonsol.warn_pct": "50", "override.madeonsol_stop_pct": "60"})
+            # announced with the words the page shows
+            note = json.loads(sqlite3.connect(path).execute("SELECT data FROM alerts WHERE kind = 'setting_changed' ORDER BY id LIMIT 1").fetchone()[0])
+            self.assertEqual((note["label"], note["fromText"], note["toText"], note["group"]), ("Sell when the price is down", "25%", "15%", "safety"))
+            # the page shows the owner's values
+            c = data.connect_ro(path)
+            snap = data.Snapshot(c, path).build({})
+            self.assertEqual(snap["settings"]["risk.STOP_LOSS_PCT"], {"value": 0.15, "default": 0.25, "overridden": True, "min": 0.02, "max": 0.5})
+            self.assertEqual(snap["risk"]["limits"]["STOP_LOSS_PCT"], 0.15)
+            self.assertFalse(snap["risk"]["paper_no_limits"])
+            self.assertEqual(snap["risk"]["max_open"], 7)
+            self.assertEqual(len(snap["settings_meta"]["settings"]), len(settings.SETTINGS))
+        finally:
             tmp.cleanup()
 
     def test_refuses_public_bind(self):

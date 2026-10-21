@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>trading-agent · friendly</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#F6F1EA;--card:#FFFFFF;--ink:#1F1B16;--mut:#7A7064;--soft:#A39A8E;--line:#EEE6DB;--sand:#EFE5D6;--act:#FF6B35;--w:#2E8A57;--wbg:#E4F2E8;--l:#B8433A;--lbg:#F8E6E2}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:1440px;height:900px;overflow:hidden;margin:0;background:var(--bg);color:var(--ink);font:500 14px/1.45 Figtree,system-ui,sans-serif;position:relative}
+.n{font-variant-numeric:tabular-nums}
+header{height:80px;padding:0 32px;display:flex;align-items:center;gap:12px}
+.mark{width:36px;height:36px;border-radius:12px;background:var(--ink);display:grid;place-items:center}
+.logo{font-weight:800;font-size:19px;letter-spacing:-.01em}
+.paper{font-weight:800;font-size:11px;letter-spacing:.08em;background:var(--sand);padding:5px 9px;border-radius:999px}
+.paper span{font-weight:600;letter-spacing:0;color:var(--mut);margin-left:4px}
+nav{margin-left:40px;background:var(--card);border-radius:999px;padding:4px;display:flex;gap:2px;box-shadow:0 1px 2px rgba(31,27,22,.05)}
+nav a{padding:8px 18px;border-radius:999px;font-weight:700;color:var(--mut)}
+nav a.on{background:var(--act);color:#fff}
+.right{margin-left:auto;display:flex;align-items:center;gap:10px}
+.pill{background:var(--card);border-radius:999px;padding:8px 14px;font-weight:700;font-size:13px;display:flex;align-items:center;gap:8px}
+.pill.q{background:transparent;color:var(--mut);font-weight:600}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--w);box-shadow:0 0 0 3px var(--wbg)}
+.tog{width:30px;height:18px;border-radius:999px;background:var(--act);position:relative}
+.tog:after{content:"";position:absolute;right:2px;top:2px;width:14px;height:14px;border-radius:50%;background:#fff}
+.banner{margin:8px 32px 0;height:48px;border-radius:16px;background:var(--sand);display:flex;align-items:center;gap:12px;padding:0 8px 0 18px;font-weight:600}
+.banner .ic{width:26px;height:26px;border-radius:50%;background:var(--ink);color:#fff;display:grid;place-items:center;font-size:11px}
+.banner a{margin-left:auto;color:var(--act);font-weight:800;padding:8px 14px;border-radius:12px;background:var(--card)}
+.grid{position:absolute;top:152px;left:32px;right:32px;bottom:32px;display:grid;grid-template-columns:880px 472px;gap:24px}
+.col{display:flex;flex-direction:column;gap:24px;min-height:0}
+.card{background:var(--card);border-radius:20px;padding:24px;box-shadow:0 1px 2px rgba(31,27,22,.04),0 8px 24px rgba(31,27,22,.04)}
+.h{display:flex;align-items:center;justify-content:space-between}
+.h h2{font-size:17px;font-weight:800}
+.h .sub{color:var(--mut);font-size:13px;font-weight:600}
+/* bag */
+.bag{height:360px;padding:28px 32px}
+.seg{background:var(--bg);border-radius:12px;padding:3px;display:flex;font-size:13px;font-weight:700}
+.seg a{padding:6px 12px;border-radius:9px;color:var(--mut)}
+.seg a.on{background:var(--act);color:#fff}
+.top{display:flex;justify-content:space-between;align-items:flex-end;margin-top:10px}
+.big{font-size:80px;font-weight:800;letter-spacing:-.04em;line-height:1}
+.big span{font-size:28px;letter-spacing:-.01em;color:var(--mut);margin-left:6px}
+.say{font-size:15.5px;white-space:nowrap;color:var(--mut);margin-top:6px}
+.say b{color:var(--l);font-weight:800}
+.wl{text-align:right;padding-bottom:4px}
+.wl .k{font-size:13px;font-weight:700;color:var(--mut)}
+.wl .v{font-size:40px;font-weight:800;letter-spacing:-.03em;line-height:1.05}
+.dots{display:flex;gap:5px;justify-content:flex-end;margin:6px 0 4px}
+.dots i{width:14px;height:14px;border-radius:50%;background:var(--lbg);box-shadow:inset 0 0 0 2px #E7B9B2}
+.dots i.w{background:var(--w);box-shadow:none}
+.wl small{font-size:12.5px;color:var(--mut);font-weight:600}
+.chart{margin-top:14px}
+.chart svg{display:block}
+.ax{display:flex;justify-content:space-between;font-size:11.5px;color:var(--soft);font-weight:600;margin-top:4px}
+.stats{display:grid;grid-template-columns:1fr 1fr 1.35fr 1fr 1fr;margin-top:14px;border-top:1px solid var(--line);padding-top:12px}
+.stats div{font-size:12.5px;color:var(--mut);font-weight:600}
+.stats div+div{padding-left:18px;border-left:1px solid var(--line)}
+.stats b{display:block;white-space:nowrap;font-size:19px;color:var(--ink);font-weight:800;letter-spacing:-.01em}
+.row{display:grid;grid-template-columns:380px 476px;gap:24px;height:332px}
+/* ok */
+.svc{list-style:none;margin-top:10px}
+.svc li{display:flex;align-items:center;gap:10px;height:28px;font-weight:600}
+.svc li span{margin-left:auto;color:var(--w);font-weight:700;font-size:13px}
+.svc li.br span{color:var(--mut)}
+.meter{margin-top:12px;background:var(--lbg);border-radius:14px;padding:10px 12px}
+.meter .t{display:flex;justify-content:space-between;font-size:13px;font-weight:700}
+.meter .t b{color:var(--l)}
+.bar{height:8px;border-radius:99px;background:#F1E9DE;margin-top:6px;overflow:hidden}
+.bar i{display:block;height:100%;border-radius:99px;background:var(--ink)}
+.meter .bar{background:#fff}.meter .bar i{background:var(--l);width:100%}
+.ctl{display:flex;gap:8px;align-items:center;margin-top:12px}
+.inp{height:40px;width:120px;border:1.5px solid #DDD3C6;border-radius:12px;display:flex;align-items:center;justify-content:space-between;padding:0 12px;font-weight:800;font-size:15px}
+.inp span{font-size:12px;color:var(--soft);font-weight:700}
+.save{height:40px;padding:0 20px;border:0;border-radius:12px;background:var(--act);color:#fff;font:800 14px Figtree}
+.ctl p{font-size:12px;color:var(--mut);line-height:1.3;margin-left:4px}
+/* brain */
+.state{background:var(--sand);border-radius:999px;padding:5px 12px;font-weight:700;font-size:13px}
+.prog{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:14px}
+.prog .t{display:flex;justify-content:space-between;font-size:13px;color:var(--mut);font-weight:600}
+.prog .t b{color:var(--ink);font-weight:800}
+.les{list-style:none;margin-top:6px}
+.les li{display:flex;gap:12px;align-items:flex-start;padding:7px 0;border-top:1px solid var(--line);font-size:13px;line-height:1.35;font-weight:500}
+.les li span{flex:1}
+.les li b{font-size:12px;font-weight:800;background:var(--bg);border-radius:8px;padding:2px 8px;white-space:nowrap}
+.lh{display:flex;justify-content:space-between;margin-top:16px;font-size:13px;font-weight:800}
+.lh span{color:var(--mut);font-weight:600}
+/* tea */
+.tea{height:476px;display:flex;flex-direction:column}
+.tea ol{list-style:none;margin-top:8px}
+.tea li{display:grid;grid-template-columns:46px 1fr;padding:10px 0;border-top:1px solid var(--line)}
+.tea time{font-size:12.5px;color:var(--soft);font-weight:700;padding-top:1px}
+.tag{display:inline-block;font-size:10.5px;font-weight:800;letter-spacing:.06em;border-radius:6px;padding:2px 7px;margin-bottom:3px}
+.t-new{background:#EDE6FA;color:#5B3FA8}.t-us{background:var(--wbg);color:var(--w)}.t-skip{background:var(--sand);color:#7A5A2E}.t-tr{background:#E6EEF7;color:#2F5D8A}.t-sold{background:var(--lbg);color:var(--l)}
+.tea p{font-size:14px;font-weight:500;line-height:1.4}
+.tr{height:216px;padding:20px 24px}
+.tr table{width:100%;border-collapse:collapse;margin-top:8px;font-size:13px}
+.tr th{font-size:11.5px;color:var(--soft);font-weight:700;text-align:right;padding-bottom:4px}
+.tr th:first-child,.tr td:first-child{text-align:left}
+.tr td{text-align:right;height:24px;font-weight:600}
+.tr td.g{color:var(--w);font-weight:800}
+</style></head><body>
+<header>
+  <div class="mark"><svg width="18" height="18" viewBox="0 0 18 18"><path d="M2 5h4v4h4v-2h6" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+  <span class="logo">trading-agent</span><span class="paper">PAPER<span>practice money</span></span>
+  <nav><a class="on">home</a><a>trades</a><a>traders</a><a>the brain</a><a>settings</a></nav>
+  <div class="right">
+    <span class="pill q">practice: no limits fr</span>
+    <span class="pill"><i class="dot"></i>live · 22:18</span>
+    <span class="pill">🗣 gen z <i class="tog"></i></span>
+  </div>
+</header>
+<div class="banner"><span class="ic">❚❚</span>today's free data is used up · copying paused till 00:00 UTC (02:00 your time)<a>raise the limit</a></div>
+<main class="grid">
+  <div class="col">
+    <section class="card bag">
+      <div class="h"><h2>the bag 💰</h2><div class="seg"><a>today</a><a>this week</a><a class="on">all time</a></div></div>
+      <div class="top">
+        <div><div class="big n">0.9772<span>SOL</span></div>
+          <p class="say">down a lil: <b>−0.0228 SOL (−2.3%)</b> since you started with 1.00. not tragic, just practice</p></div>
+        <div class="wl"><div class="k">W rate</div><div class="v n">9%</div>
+          <div class="dots"><i class="w"></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+          <small>1 W out of 11 trades</small></div>
+      </div>
+      <div class="chart">
+        <svg width="816" height="64" viewBox="0 0 816 64" aria-label="bag stepped down from 1.000 to 0.977 by 07:07, flat since">
+          <line x1="0" y1="6" x2="816" y2="6" stroke="#DDD3C6" stroke-dasharray="3 5"/>
+          <path d="M0 6.2H18.3V16.5H32.5V25.5H45.3V14H55.6V24.3H70.7V34.2H82.6V44.5H92.1V55.3H816V64H0Z" fill="#1F1B16" fill-opacity=".05"/>
+          <path d="M0 6.2H18.3V16.5H32.5V25.5H45.3V14H55.6V24.3H70.7V34.2H82.6V44.5H92.1V55.3H812" fill="none" stroke="#1F1B16" stroke-width="2.5" stroke-linejoin="round"/>
+          <circle cx="810" cy="55.3" r="5" fill="#fff" stroke="#1F1B16" stroke-width="2.5"/>
+          <text x="800" y="44" text-anchor="end" font-family="Figtree" font-size="12" font-weight="700" fill="#7A7064">0.977 · chillin flat since 07:07</text>
+          <text x="104" y="16" font-family="Figtree" font-size="12" font-weight="700" fill="#A39A8E">started 1.000</text>
+        </svg>
+        <div class="ax n"><span>05:11</span><span>12:00</span><span>18:00</span><span>now 22:18</span></div>
+      </div>
+      <div class="stats n">
+        <div>today<b>−0.0228</b></div><div>this week<b>−0.0228</b></div><div>avg W / avg L<b>+0.005 / −0.003</b></div><div>worst dip<b>2.3%</b></div><div>fees we ate<b>0.0159</b></div>
+      </div>
+    </section>
+    <div class="row">
+      <section class="card">
+        <div class="h"><h2>is it OK? 👀</h2><span class="sub">all good, data's tapped</span></div>
+        <ul class="svc">
+          <li><i class="dot"></i>data collector<span>vibing</span></li>
+          <li><i class="dot"></i>trader<span>vibing</span></li>
+          <li><i class="dot"></i>texter<span>vibing</span></li>
+          <li class="br"><i class="dot"></i>the brain<span>on schedule (next study 00:40 UTC)</span></li>
+        </ul>
+        <div class="meter n"><div class="t">data used today<b>1500 / 1500 MB · limit hit</b></div><div class="bar"><i></i></div></div>
+        <div class="ctl"><div class="inp n">1500<span>MB</span></div><button class="save">save</button><p>daily data limit · MadeOnSol job stops at 90%</p></div>
+      </section>
+      <section class="card">
+        <div class="h"><h2>the brain 🧠</h2><span class="state">📚 just studying for now</span></div>
+        <div class="prog n">
+          <div><div class="t">chances studied<b>106/200</b></div><div class="bar"><i style="width:53%"></i></div></div>
+          <div><div class="t">trades in its test<b>1/30</b></div><div class="bar"><i style="width:3.3%"></i></div></div>
+        </div>
+        <div class="lh">remembers 4 lessons<span>never forgets 🔒</span></div>
+        <ul class="les">
+          <li><span>🆕 when our trader bought tiny, under 0.1 SOL → copying = L</span><b>8.5 pts</b></li>
+          <li><span>🆕 when the coin was under a minute old → L</span><b>3.6 pts</b></li>
+          <li><span>🆕 when the trader had a good grade → W</span><b>2.5 pts</b></li>
+          <li><span>🆕 when the creator spammed 5+ coins that day → W</span><b>2.2 pts</b></li>
+        </ul>
+      </section>
+    </div>
+  </div>
+  <div class="col">
+    <section class="card tea">
+      <div class="h"><h2>live tea ☕</h2><span class="pill" style="background:var(--bg)"><i class="dot"></i>live · 22:18</span></div>
+      <ol>
+        <li><time class="n">22:18</time><div><span class="tag t-new">NEW COIN</span><p>$ENERGY just dropped · creator aped 1.00 SOL</p></div></li>
+        <li><time class="n">22:16</time><div><span class="tag t-us">COPIED</span><p>copying 4Yy3…5AeY on $RENT 🫡</p></div></li>
+        <li><time class="n">22:16</time><div><span class="tag t-us">WE BOUGHT</span><p>we bought $RENT for 0.0200 SOL</p></div></li>
+        <li><time class="n">22:15</time><div><span class="tag t-skip">SKIPPED</span><p>skipped EUku…ziAo on $Trainooor — the creator already sold, that's giving scam</p></div></li>
+        <li><time class="n">22:15</time><div><span class="tag t-tr">TRADER BUY</span><p>4nDJ…tZ4s aped 0.226 SOL into $Trainooor</p></div></li>
+        <li><time class="n">22:14</time><div><span class="tag t-sold">WE SOLD</span><p>we sold $RENT for 0.0175 SOL (our trader sold, so we did)</p></div></li>
+      </ol>
+    </section>
+    <section class="card tr">
+      <div class="h"><h2>traders we copy</h2><span class="sub">5 of them</span></div>
+      <table class="n"><tr><th>who</th><th>grade</th><th>copy return</th><th>copy W rate</th></tr>
+        <tr><td>4nDJ…tZ4s</td><td>0.104</td><td class="g">+19.0%</td><td>75%</td></tr>
+        <tr><td>EUku…ziAo</td><td>0.047</td><td class="g">+7.6%</td><td>69%</td></tr>
+        <tr><td>FtRT…2Gp7</td><td>0.020</td><td class="g">+3.0%</td><td>42%</td></tr>
+        <tr><td>Hbp8…Dqcq</td><td>0.012</td><td class="g">+2.5%</td><td>40%</td></tr>
+        <tr><td>8p4j…omaq</td><td>0.005</td><td class="g">+1.2%</td><td>43%</td></tr>
+      </table>
+    </section>
+  </div>
+</main>
+</body></html>

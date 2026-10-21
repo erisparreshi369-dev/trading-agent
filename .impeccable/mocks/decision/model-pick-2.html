@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>trading-agent · pet bot</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;500;600;700&family=Nunito:wght@500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#FFF4D6;--ink:#2B2340;--or:#FF8A3D;--gr:#48C78E;--bl:#6C8BFF;--card:#FFFBEF;--line:#E9DCB8;--mut:#6E6584;--lcd:#DDEFD2;--sh:4px 4px 0 #2B2340}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:1440px;height:900px;overflow:hidden;margin:0;background:var(--bg);color:var(--ink);font:600 14px/1.4 Nunito,system-ui,sans-serif}
+.px{font-family:"Pixelify Sans",monospace;font-variant-numeric:tabular-nums}
+header{height:64px;padding:0 32px;display:flex;align-items:center;gap:14px}
+.logo{display:flex;align-items:center;gap:10px;font-weight:900;font-size:18px;letter-spacing:-.01em}
+.paper{font:800 11px/1 Nunito;letter-spacing:.1em;background:var(--ink);color:var(--bg);padding:6px 8px;border-radius:6px}
+nav{display:flex;gap:4px;margin-left:24px;background:var(--card);border:2px solid var(--ink);border-radius:12px;padding:3px}
+nav a{color:var(--mut);text-decoration:none;font-weight:800;padding:6px 16px;border-radius:8px;font-size:14px}
+nav a.on{background:var(--ink);color:var(--bg)}
+.right{margin-left:auto;display:flex;align-items:center;gap:16px;font-weight:700}
+.live{display:flex;align-items:center;gap:8px}.dot{width:8px;height:8px;border-radius:50%;background:var(--gr);display:inline-block}
+.sw{display:flex;align-items:center;gap:10px;font-weight:800}
+.tog{width:40px;height:22px;border-radius:11px;background:var(--or);border:2px solid var(--ink);position:relative}
+.tog i{position:absolute;right:2px;top:2px;width:14px;height:14px;border-radius:50%;background:var(--card);border:2px solid var(--ink)}
+.alert{margin:0 32px;height:40px;display:flex;align-items:center;gap:10px;padding:0 16px;background:var(--ink);color:var(--bg);border-radius:12px;font-weight:700}
+.alert b{color:var(--or)}
+main{display:grid;grid-template-columns:repeat(12,1fr);grid-template-rows:384px 356px;gap:16px;padding:16px 32px 0}
+.card{background:var(--card);border:2px solid var(--ink);border-radius:18px;box-shadow:var(--sh);padding:20px;min-width:0}
+h2{font-size:12px;font-weight:900;letter-spacing:.1em;text-transform:uppercase;color:var(--mut);display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px}
+h2 span{letter-spacing:0;text-transform:none;font-weight:700;font-size:12px}
+.pet{grid-column:span 7;display:grid;grid-template-columns:260px 1fr;gap:24px;padding:20px 24px 20px 20px}
+.lcdwrap{background:var(--ink);border-radius:22px;padding:14px;display:flex;flex-direction:column;gap:10px}
+.lcd{background:var(--lcd);border-radius:12px;height:224px;position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;box-shadow:inset 0 0 0 2px rgba(43,35,64,.15)}
+.lcd .mood{font-size:16px;color:var(--ink)}
+.lcd .tl{position:absolute;top:8px;left:12px;font-size:12px;color:var(--mut)}.lcd .tm{position:absolute;top:8px;right:12px;font-size:12px;color:var(--mut)}
+.btns{display:flex;justify-content:center;gap:18px;padding:4px 0}
+.btns b{width:22px;height:22px;border-radius:50%;background:var(--or);border:2px solid #000}
+.btns b:nth-child(2){background:var(--bl)}.btns b:nth-child(3){background:var(--gr)}
+.bagl{font-size:13px;font-weight:800;color:var(--mut)}
+.bag{font-size:56px;line-height:1;margin:4px 0 4px;letter-spacing:-.01em}.bag small{font-size:26px;margin-left:8px}
+.sub{font-weight:700;color:var(--mut)}.sub b{color:var(--or)}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);border-top:2px dashed var(--line);border-bottom:2px dashed var(--line);margin:10px 0 10px;padding:8px 0}
+.stats div{font-size:12px;font-weight:800;color:var(--mut)}.stats .px{display:block;font-size:22px;color:var(--ink);margin-top:2px}
+.trades{width:100%;border-collapse:collapse;font-size:13px}
+.trades td{padding:3px 0;border-bottom:1px solid var(--line)}.trades tr:last-child td{border:0}
+.trades .r{text-align:right}.neg{color:#D9562B}.pos{color:#2E9E6B}
+.vit{grid-column:span 5;display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.svc{display:flex;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid var(--line)}
+.svc:last-of-type{border:0}.svc .n{flex:1;font-weight:800}.svc .s{font-size:12px;color:var(--mut);font-weight:700}
+.hp{display:flex;gap:3px;margin:4px 0 14px}.hp i{width:22px;height:14px;background:var(--gr);border:2px solid var(--ink)}
+.meter{height:18px;border:2px solid var(--ink);border-radius:5px;background:var(--bg);overflow:hidden;display:flex;margin:6px 0 4px}
+.meter i{background:var(--or);height:100%;border-right:2px solid var(--ink)}
+.mrow{display:flex;justify-content:space-between;font-size:12px;font-weight:700;color:var(--mut)}.mrow .px{font-size:15px;color:var(--ink)}
+.form{display:flex;gap:8px;margin-top:10px}
+.inp{flex:1;height:36px;border:2px solid var(--ink);border-radius:10px;background:#fff;display:flex;align-items:center;justify-content:space-between;padding:0 10px;font-weight:800}
+.inp span{color:var(--mut);font-size:12px}
+.btn{height:36px;padding:0 16px;border:2px solid var(--ink);border-radius:10px;background:var(--ink);color:var(--bg);font:800 14px Nunito}
+.sec+.sec{margin-top:26px}
+.diary{grid-column:span 5}
+.entry{display:grid;grid-template-columns:44px 96px 1fr;gap:10px;align-items:baseline;padding:9px 0;border-bottom:1px solid var(--line);font-size:14px}
+.entry:last-child{border:0}.entry .t{color:var(--mut);font-size:14px}
+.tag{font-size:10px;font-weight:900;letter-spacing:.06em;padding:3px 6px;border-radius:5px;border:1.5px solid var(--ink);justify-self:start;white-space:nowrap}
+.t-new{background:#E2E8FF}.t-cop{background:#FFE3CF}.t-buy{background:#D3F1E2}.t-skip{background:#fff;color:var(--mut);border-color:var(--mut)}.t-tb{background:#FFF4D6}.t-sold{background:#FFE3CF}
+.trd{grid-column:span 4}
+.tr{display:grid;grid-template-columns:1fr 56px 64px 64px;gap:8px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line);font-size:14px}
+.tr:last-child{border:0}.tr.h{font-size:11px;font-weight:900;color:var(--mut);letter-spacing:.06em;text-transform:uppercase;padding-top:0}
+.tr .r{text-align:right}.addr{font-weight:800}
+.brain{grid-column:span 3}
+.state{display:inline-flex;align-items:center;gap:8px;background:#E2E8FF;border:2px solid var(--ink);border-radius:10px;padding:6px 10px;font-weight:800;margin-bottom:12px}
+.les{display:grid;grid-template-columns:1fr auto;gap:8px;padding:8px 0;border-bottom:1px solid var(--line);font-size:13px;align-items:center}
+.les:last-of-type{border:0}.pt{font-size:14px;padding:2px 6px;border-radius:5px;white-space:nowrap}
+.pt.l{background:#FFE3CF}.pt.w{background:#D3F1E2}
+.foot{margin-top:10px;font-size:12px;font-weight:800;color:var(--mut);display:flex;align-items:center;gap:6px}
+</style></head><body>
+<header>
+  <div class="logo"><svg width="22" height="22" viewBox="0 0 8 8" shape-rendering="crispEdges"><path fill="#2B2340" d="M1 1h6v6h-6z"/><path fill="#FF8A3D" d="M2 2h4v4h-4z"/><path fill="#2B2340" d="M3 3h1v1h-1zM5 3h1v1h-1z"/></svg>trading-agent</div>
+  <span class="paper">PAPER</span>
+  <nav><a class="on">my pet</a><a>trades</a><a>traders</a><a>brain</a><a>settings</a></nav>
+  <div class="right"><span class="live"><span class="dot"></span>live · <span class="px">22:18</span></span><span class="sw">gen z<span class="tog"><i></i></span></span></div>
+</header>
+<div class="alert"><svg width="16" height="16" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" fill="none" stroke="#FF8A3D" stroke-width="2"/><path d="M8 4v5M8 11v1.5" stroke="#FF8A3D" stroke-width="2" stroke-linecap="round"/></svg>today's free data is used up · <b>copying paused till 00:00 UTC</b> (02:00 your time)</div>
+<main>
+  <section class="card pet">
+    <div class="lcdwrap">
+      <div class="lcd">
+        <span class="tl px">PAPER</span><span class="tm px">22:18</span>
+        <svg width="176" height="154" viewBox="0 0 16 14" shape-rendering="crispEdges">
+          <path fill="#FFB27D" d="M4 3h8v1h-8zM3 4h10v6h-10zM4 10h8v1h-8z"/>
+          <path fill="#2B2340" d="M7 0h2v1h-2zM8 1h1v1h-1zM4 2h8v1h-8zM3 3h1v1h-1zM12 3h1v1h-1zM2 4h1v6h-1zM13 4h1v6h-1zM3 10h1v1h-1zM12 10h1v1h-1zM4 11h8v1h-8zM4 12h1v1h-1zM11 12h1v1h-1zM3 13h2v1h-2zM11 13h2v1h-2z"/>
+          <path fill="#2B2340" d="M5 5h2v2h-2zM9 5h2v2h-2zM7 8h2v1h-2zM6 9h1v1h-1zM9 9h1v1h-1z"/>
+          <path fill="#6C8BFF" d="M5 7h1v2h-1z"/>
+        </svg>
+        <div class="mood px">a lil sad: down 2.3%</div>
+      </div>
+      <div class="btns"><b></b><b></b><b></b></div>
+    </div>
+    <div>
+      <div class="bagl">the bag · started 1.00 SOL</div>
+      <div class="bag px">0.9772<small>SOL</small></div>
+      <div class="sub">all time <b class="px">−0.0228 SOL (−2.3%)</b> · today <b class="px">−0.0228</b></div>
+      <div class="stats">
+        <div>W rate<span class="px">9%</span></div>
+        <div>trades<span class="px">1 W / 11</span></div>
+        <div>worst dip<span class="px">2.3%</span></div>
+        <div>fees we ate<span class="px">0.0159</span></div>
+      </div>
+      <h2>past trades <span>5 most recent</span></h2>
+      <table class="trades">
+        <tr><td><b>$BBC</b></td><td class="sub">our trader sold</td><td class="r px neg">−24.5%</td><td class="r px neg">−0.0048 SOL</td></tr>
+        <tr><td><b>$PUMPEMON</b></td><td class="sub"></td><td class="r px neg">−7.8%</td><td></td></tr>
+        <tr><td><b>$PACKZ</b></td><td class="sub"></td><td class="r px neg">−7.3%</td><td></td></tr>
+        <tr><td><b>$RIP</b></td><td class="sub">price tanked, auto-sold</td><td class="r px neg">−29.7%</td><td></td></tr>
+        <tr><td><b>$POKEPAD</b></td><td class="sub">the one W</td><td class="r px pos">+27.1%</td><td class="r px pos">+0.0054 SOL</td></tr>
+      </table>
+    </div>
+  </section>
+  <section class="card vit">
+    <div>
+      <h2>is it OK <span>health</span></h2>
+      <div class="hp"><i></i><i></i><i></i><i></i><span class="px" style="margin-left:8px;font-size:15px">4/4 vibing</span></div>
+      <div class="svc"><span class="dot"></span><span class="n">data collector</span><span class="s">vibing</span></div>
+      <div class="svc"><span class="dot"></span><span class="n">trader</span><span class="s">vibing</span></div>
+      <div class="svc"><span class="dot"></span><span class="n">texter</span><span class="s">vibing</span></div>
+      <div class="svc"><span class="dot" style="background:var(--bl)"></span><span class="n">the brain</span><span class="s">on schedule</span></div>
+      <div class="foot">next study 00:40 UTC</div>
+    </div>
+    <div>
+      <div class="sec">
+        <h2>data left <span>today</span></h2>
+        <div class="meter"><i style="width:100%"></i></div>
+        <div class="mrow"><span>used <span class="px">1500/1500</span> MB</span><span>0 left</span></div>
+        <div class="form"><div class="inp">1500<span>MB / day</span></div><button class="btn">save</button></div>
+      </div>
+      <div class="sec">
+        <h2>brain study <span>practice</span></h2>
+        <div class="mrow"><span>chances studied</span><span class="px">106/200</span></div>
+        <div class="meter"><i style="width:53%;background:var(--bl)"></i></div>
+        <div class="mrow" style="margin-top:8px"><span>test trades</span><span class="px">1/30</span></div>
+        <div class="meter"><i style="width:3.3%;background:var(--gr)"></i></div>
+      </div>
+    </div>
+  </section>
+  <section class="card diary">
+    <h2>live tea · its diary <span>newest first</span></h2>
+    <div class="entry"><span class="t px">22:18</span><span class="tag t-new">NEW COIN</span><span><b>$ENERGY</b> just dropped · creator aped 1.00 SOL</span></div>
+    <div class="entry"><span class="t px">22:16</span><span class="tag t-cop">COPIED</span><span>copying <b>4Yy3…5AeY</b> on <b>$RENT</b></span></div>
+    <div class="entry"><span class="t px">22:16</span><span class="tag t-buy">WE BOUGHT</span><span><b>$RENT</b> for 0.0200 SOL</span></div>
+    <div class="entry"><span class="t px">22:15</span><span class="tag t-skip">SKIPPED</span><span><b>EUku…ziAo</b> on <b>$Trainooor</b>: the creator already sold, that's giving scam</span></div>
+    <div class="entry"><span class="t px">22:15</span><span class="tag t-tb">TRADER BUY</span><span><b>4nDJ…tZ4s</b> aped 0.226 SOL into <b>$Trainooor</b></span></div>
+    <div class="entry"><span class="t px">22:14</span><span class="tag t-sold">WE SOLD</span><span><b>$RENT</b> for 0.0175 SOL (our trader sold, so we did)</span></div>
+  </section>
+  <section class="card trd">
+    <h2>traders we copy <span>5 wallets</span></h2>
+    <div class="tr h"><span>wallet</span><span class="r">grade</span><span class="r">copy</span><span class="r">last</span></div>
+    <div class="tr"><span class="addr">4nDJ…tZ4s</span><span class="r px">0.104</span><span class="r px pos">+19.0%</span><span class="r sub">15h ago</span></div>
+    <div class="tr"><span class="addr">EUku…ziAo</span><span class="r px">0.047</span><span class="r px pos">+7.6%</span><span class="r sub">15h ago</span></div>
+    <div class="tr"><span class="addr">FtRT…2Gp7</span><span class="r px">0.020</span><span class="r px pos">+3.0%</span><span class="r sub">15h ago</span></div>
+    <div class="tr"><span class="addr">Hbp8…Dqcq</span><span class="r px">0.012</span><span class="r px pos">+2.5%</span><span class="r sub">16h ago</span></div>
+    <div class="tr"><span class="addr">8p4j…omaq</span><span class="r px">0.005</span><span class="r px pos">+1.2%</span><span class="r sub">17h ago</span></div>
+  </section>
+  <section class="card brain">
+    <h2>the brain <span>4 lessons</span></h2>
+    <div class="state"><svg width="14" height="14" viewBox="0 0 7 7" shape-rendering="crispEdges"><path fill="#6C8BFF" d="M1 0h5v1h-5zM0 1h7v4h-7zM1 5h5v1h-5zM3 6h1v1h-1z"/></svg>just studying for now</div>
+    <div class="les"><span>tiny buys under 0.1 SOL</span><span class="pt l px">L 8.5 pts</span></div>
+    <div class="les"><span>coin under a minute old</span><span class="pt l px">L 3.6 pts</span></div>
+    <div class="les"><span>trader with a good grade</span><span class="pt w px">W 2.5 pts</span></div>
+    <div class="les"><span>creator spammed 5+ coins</span><span class="pt w px">W 2.2 pts</span></div>
+    <div class="foot"><svg width="12" height="12" viewBox="0 0 12 12"><path d="M2 6.5l2.5 2.5L10 3.5" fill="none" stroke="#48C78E" stroke-width="2.2"/></svg>never forgets</div>
+  </section>
+</main>
+</body></html>

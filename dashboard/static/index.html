@@ -3,85 +3,141 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Trading Agent Live</title>
+<meta name="color-scheme" content="light dark">
+<title>trading-agent</title>
+<link rel="preload" href="/fonts/Rubik.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/fonts/PixelifySans.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/style.css">
+<script src="/genz.js" defer></script>
 <script src="/app.js" defer></script>
 </head>
 <body>
-<header class="top">
-  <div class="brand">
-    <span id="mode" class="mode mode-unknown">…</span>
-    <div>
-      <h1>trading-agent</h1>
-      <div class="sub">view only, except 2 daily limits · <span id="conn" class="conn">connecting…</span> · <span id="clock"></span></div>
-    </div>
+<header class="titlebar">
+  <div class="tb-id">
+    <span id="mode" class="mode">…</span>
+    <span class="appname">trading-agent</span>
+    <span class="status"><span id="conn" class="conn">connecting…</span><span class="sep" aria-hidden="true">·</span><span id="clock" class="num"></span></span>
   </div>
-  <div id="flags" class="flags"></div>
+  <nav class="tabs" role="tablist" aria-label="Sections">
+    <button role="tab" id="tb-home" aria-controls="tab-home" aria-selected="true" data-tab="home"><span data-gz="home">Home</span></button>
+    <button role="tab" id="tb-buddies" aria-controls="tab-buddies" aria-selected="false" data-tab="buddies" tabindex="-1"><span data-gz="buddies">Traders</span></button>
+    <button role="tab" id="tb-brain" aria-controls="tab-brain" aria-selected="false" data-tab="brain" tabindex="-1"><span data-gz="the brain">Learning brain</span></button>
+    <button role="tab" id="tb-limits" aria-controls="tab-limits" aria-selected="false" data-tab="limits" tabindex="-1"><span data-gz="limits">Limits</span></button>
+    <button role="tab" id="tb-nerd" aria-controls="tab-nerd" aria-selected="false" data-tab="nerd" tabindex="-1"><span data-gz="nerd stuff">Details</span></button>
+  </nav>
+  <div class="tb-end">
+    <div id="flags" class="flags"></div>
+    <button id="voice" class="voice-btn" type="button"></button>
+  </div>
 </header>
-<div id="problem" class="problem" hidden></div>
 
-<section id="services" class="services" aria-label="Services"></section>
+<div id="problem" class="problem" role="alert" hidden></div>
 
-<div class="layout">
-  <main class="panels">
-    <section class="panel span2" aria-labelledby="h-money">
-      <h2 id="h-money">Money <small>paper, net of fees and slippage</small></h2>
-      <div id="kpis" class="kpis"></div>
-      <div class="chart-head"><h3>Equity, SOL</h3><span class="muted" id="curve-note"></span></div>
-      <div id="equity" class="chart"></div>
+<section class="away" id="away" aria-live="polite">
+  <svg id="away-face" class="away-face" viewBox="0 0 12 12" shape-rendering="crispEdges" aria-hidden="true"></svg>
+  <div class="away-text">
+    <p><b id="away-label">Status:</b> <span id="away-msg">…</span></p>
+    <small id="away-sub"></small>
+  </div>
+  <span id="away-pill" class="away-pill"></span>
+</section>
+
+<div class="shell">
+  <main class="tabpanels">
+    <section class="tab" id="tab-home" role="tabpanel" aria-labelledby="tb-home">
+      <div class="home-grid">
+        <div class="stack">
+        <article class="panel bag" id="bag" aria-labelledby="h-bag">
+          <header class="ph"><h2 id="h-bag" data-gz="The bag">Money</h2><small data-gz="practice money, after fees">practice money, after fees and price moves</small></header>
+          <div class="screen">
+            <div id="bag-figure" class="figure"></div>
+            <p id="bag-delta" class="delta"></p>
+            <div id="equity" class="chart"></div>
+          </div>
+          <dl id="kpis" class="stats"></dl>
+        </article>
+        <article class="panel" aria-labelledby="h-pos">
+          <header class="ph"><h2 id="h-pos" data-gz="Coins we hold rn">Coins we hold</h2><small id="pos-count"></small></header>
+          <div id="positions" class="table-wrap"></div>
+        </article>
+        </div>
+        <div class="stack">
+          <article class="panel" aria-labelledby="h-ok">
+            <header class="ph"><h2 id="h-ok" data-gz="Is it OK?">Is everything OK?</h2><small id="ok-note"></small></header>
+            <ul id="services" class="parts"></ul>
+            <div id="ok-data"></div>
+            <div id="cap-control" class="control"></div>
+          </article>
+          <article class="panel" aria-labelledby="h-closed">
+            <header class="ph"><h2 id="h-closed" data-gz="Past trades">Past trades</h2><small data-gz="all the deets in nerd stuff">full details under Details</small></header>
+            <div id="closed" class="table-wrap scroll short"></div>
+          </article>
+        </div>
+      </div>
     </section>
 
-    <section class="panel span2" aria-labelledby="h-pos">
-      <h2 id="h-pos">Open positions <small id="pos-count"></small></h2>
-      <div id="positions" class="table-wrap"></div>
+    <section class="tab" id="tab-buddies" role="tabpanel" aria-labelledby="tb-buddies" hidden>
+      <article class="panel" aria-labelledby="h-wallets">
+        <header class="ph"><h2 id="h-wallets" data-gz="Buddy list">Traders we copy</h2><small id="wallets-note"></small></header>
+        <p class="hint" data-gz="online = traded in the last hour · idle = today · away = longer. bigger icon = better grade.">Online means they traded in the last hour, idle today, away longer. A bigger icon means a better grade.</p>
+        <div id="wallets" class="table-wrap"></div>
+        <details class="more">
+          <summary><span data-gz="Traders we unfollowed">Dropped traders</span> <span id="dropped-count"></span></summary>
+          <div id="dropped" class="table-wrap scroll"></div>
+        </details>
+      </article>
     </section>
 
-    <section class="panel span2" aria-labelledby="h-closed">
-      <h2 id="h-closed">Closed trades <small>latest 100</small></h2>
-      <div id="closed" class="table-wrap scroll"></div>
+    <section class="tab" id="tab-brain" role="tabpanel" aria-labelledby="tb-brain" hidden>
+      <article class="panel" aria-labelledby="h-learn">
+        <header class="ph"><h2 id="h-learn" data-gz="The brain">Learning brain</h2><small data-gz="studies every night, never forgets">studies every night, never deletes anything</small></header>
+        <div id="learner"></div>
+      </article>
     </section>
 
-    <section class="panel" aria-labelledby="h-risk">
-      <h2 id="h-risk">Risk</h2>
-      <div id="risk"></div>
+    <section class="tab" id="tab-limits" role="tabpanel" aria-labelledby="tb-limits" hidden>
+      <p class="hint" data-gz="change any limit here. the bot picks it up in a few secs and you get a text. real money can never go past the walls in the code.">Change any limit here. The bot uses it within a few seconds and you get a Telegram message. Real-money trading can never go past the safety walls in the code.</p>
+      <div id="limits" class="limits-grid"></div>
     </section>
 
-    <section class="panel" aria-labelledby="h-data">
-      <h2 id="h-data">Data collection</h2>
-      <div id="data"></div>
-      <div id="cap-control" class="control"></div>
-    </section>
-
-    <section class="panel span2" aria-labelledby="h-wallets">
-      <h2 id="h-wallets">Followed wallets <small id="wallets-note"></small></h2>
-      <div id="wallets" class="table-wrap"></div>
-      <details class="dropped">
-        <summary>Dropped wallets <span id="dropped-count"></span></summary>
-        <div id="dropped" class="table-wrap scroll"></div>
-      </details>
-    </section>
-
-    <section class="panel" aria-labelledby="h-lat">
-      <h2 id="h-lat">Latency <small>last 7 days</small></h2>
-      <div id="latency"></div>
-    </section>
-
-    <section class="panel" aria-labelledby="h-mos">
-      <h2 id="h-mos">MadeOnSol <small>optional helper, daily job only</small></h2>
-      <div id="madeonsol"></div>
-      <div id="mos-control" class="control"></div>
-    </section>
-
-    <section class="panel" aria-labelledby="h-learn">
-      <h2 id="h-learn">Learner</h2>
-      <div id="learner"></div>
+    <section class="tab" id="tab-nerd" role="tabpanel" aria-labelledby="tb-nerd" hidden>
+      <div class="nerd-grid">
+        <article class="panel" aria-labelledby="h-data">
+          <header class="ph"><h2 id="h-data" data-gz="Data intake">Data collection</h2></header>
+          <div id="data"></div>
+        </article>
+        <article class="panel" aria-labelledby="h-risk">
+          <header class="ph"><h2 id="h-risk" data-gz="Safety stuff">Risk limits</h2></header>
+          <div id="risk"></div>
+        </article>
+        <article class="panel" aria-labelledby="h-lat">
+          <header class="ph"><h2 id="h-lat" data-gz="Speed check">Latency</h2><small data-gz="last 7 days">last 7 days</small></header>
+          <div id="latency" class="table-wrap"></div>
+        </article>
+        <article class="panel wide" aria-labelledby="h-closed-full">
+          <header class="ph"><h2 id="h-closed-full" data-gz="Every past trade">All past trades</h2><small data-gz="last 100, with prices">latest 100, with prices</small></header>
+          <div id="closed-full" class="table-wrap scroll"></div>
+          <p id="closed-note" class="hint footnote"></p>
+        </article>
+        <article class="panel" aria-labelledby="h-mos">
+          <header class="ph"><h2 id="h-mos">MadeOnSol</h2><small data-gz="side helper, once a day">optional helper, daily job only</small></header>
+          <div id="madeonsol"></div>
+          <div id="mos-control" class="control"></div>
+        </article>
+      </div>
     </section>
   </main>
 
-  <aside class="panel feed" aria-labelledby="h-feed">
-    <h2 id="h-feed">Live activity</h2>
-    <div id="filters" class="filters" role="tablist"></div>
-    <ol id="feed" class="feed-list"></ol>
+  <aside class="rail">
+    <section class="panel buddies-mini" aria-labelledby="h-mini">
+      <header class="ph"><h2 id="h-mini" data-gz="Buddy list">Traders we copy</h2><small id="mini-note"></small></header>
+      <ul id="buddies-mini" class="mini"></ul>
+    </section>
+    <section class="panel feed" aria-labelledby="h-feed">
+      <header class="ph"><h2 id="h-feed" data-gz="Live tea">Live activity</h2><small data-gz="chat log">newest first</small></header>
+      <div id="filters" class="filters" role="toolbar" aria-label="Filter the activity"></div>
+      <ol id="feed" class="feed-list"></ol>
+    </section>
   </aside>
 </div>
 <div id="tip" class="tip" hidden></div>

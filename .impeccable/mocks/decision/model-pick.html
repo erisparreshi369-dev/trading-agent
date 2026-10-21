@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>trading-agent · wrapped</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0E0E10;--lime:#C6F432;--red:#FF4F2E;--pur:#A66BFF;--wh:#FFFFFF;--ink:#0E0E10;--s1:#18181C;--line:#2A2A31;--mut:#9C9CA6}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:1440px;height:900px;overflow:hidden;margin:0;background:var(--bg);color:var(--wh);font:500 14px/1.4 Manrope,system-ui,sans-serif;position:relative}
+.d{font-family:"Bricolage Grotesque",sans-serif;letter-spacing:-.035em;font-weight:800}
+.n{font-variant-numeric:tabular-nums}
+header{height:64px;padding:0 24px;display:flex;align-items:center;gap:14px;border-bottom:1px solid var(--line)}
+.logo{font-size:22px;line-height:1}
+.paper{font:800 11px/1 Manrope;letter-spacing:.08em;background:var(--wh);color:var(--ink);padding:6px 8px;border-radius:6px}
+nav{display:flex;gap:4px;margin-left:28px}
+nav a{color:var(--mut);text-decoration:none;font-weight:700;padding:8px 16px;border-radius:999px}
+nav a.on{background:var(--wh);color:var(--ink)}
+.right{margin-left:auto;display:flex;align-items:center;gap:10px}
+.chip{border:1px solid var(--line);border-radius:999px;padding:7px 12px;font-weight:700;font-size:13px;display:flex;align-items:center;gap:8px;color:var(--wh)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--lime);box-shadow:0 0 0 3px rgba(198,244,50,.22)}
+.tog{width:28px;height:16px;border-radius:999px;background:var(--lime);position:relative}
+.tog:after{content:"";position:absolute;right:2px;top:2px;width:12px;height:12px;border-radius:50%;background:var(--ink)}
+.alert{margin:12px 24px 0;height:44px;background:var(--red);color:var(--ink);border-radius:14px;display:flex;align-items:center;padding:0 6px 0 18px;gap:10px;font-weight:700}
+.btn{margin-left:auto;background:var(--ink);color:var(--wh);font:700 13px Manrope;padding:9px 14px;border-radius:10px;border:0}
+.grid{position:absolute;top:132px;left:24px;right:24px;bottom:24px;display:grid;grid-template-columns:640px 380px 340px;gap:16px}
+.col{display:flex;flex-direction:column;gap:16px;min-height:0}
+.blk{border-radius:24px;padding:24px;position:relative;overflow:hidden;color:var(--ink)}
+.lbl{font:800 12px/1 Manrope;letter-spacing:.08em;text-transform:uppercase;display:flex;justify-content:space-between;align-items:center}
+.lbl i{font-style:normal;text-transform:none;letter-spacing:0;font-weight:600;font-size:13px;opacity:.7}
+/* bag */
+.bag{background:var(--lime);height:472px;padding:28px;display:flex;flex-direction:column}
+.big{font-size:116px;line-height:.86;margin-top:18px}
+.big span{font-size:40px;letter-spacing:-.02em;margin-left:8px}
+.say{font-size:19px;font-weight:600;margin-top:10px}
+.row2{display:grid;grid-template-columns:220px 1fr;gap:28px;margin-top:18px}
+.wr{font-size:72px;line-height:.85}
+.wl small{display:block;font-weight:800;font-size:12px;letter-spacing:.08em;text-transform:uppercase;margin-top:6px}
+.sq{display:flex;gap:4px;margin:12px 0 8px}
+.sq b{width:16px;height:16px;border-radius:4px;border:2px solid var(--ink)}.sq b.w{background:var(--ink)}
+.wl p{font-size:12.5px;font-weight:600;line-height:1.35}
+.chart svg{display:block}.ax{display:flex;justify-content:space-between;font-size:11px;font-weight:700;margin-top:6px;opacity:.75}
+.strip{margin-top:auto;border-top:2px solid var(--ink);padding-top:12px;display:grid;grid-template-columns:repeat(4,1fr)}
+.strip div{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase}
+.strip b{display:block;font:800 24px/1.1 "Bricolage Grotesque";letter-spacing:-.03em;text-transform:none;margin-top:4px}
+.pair{display:grid;grid-template-columns:1fr 1fr;gap:16px;height:256px}
+.org{background:var(--red)} .wht{background:var(--wh)} .pur{background:var(--pur)}
+table{width:100%;border-collapse:collapse;margin-top:12px}
+th{font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;text-align:left;padding-bottom:6px;opacity:.7}
+td{font-size:13px;font-weight:700;padding:5px 0;border-top:1.5px solid rgba(14,14,16,.18)}
+td.r,th.r{text-align:right}
+td .d{font-size:17px}
+.trade td{padding:4px 0;white-space:nowrap}
+.trade em{font-style:normal;font-weight:600;font-size:10.5px;color:#6B6B73;margin-left:6px}
+.trade .l{color:#D63A1C}
+.trade tr.win td{background:var(--lime);border-top-color:transparent}
+.trade tr.win td:first-child{padding-left:8px;border-radius:8px 0 0 8px}.trade tr.win td:last-child{padding-right:8px;border-radius:0 8px 8px 0}
+/* brain */
+.pur{height:412px}
+.bt{font-size:27px;line-height:1.05;margin-top:16px}
+.prog{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:18px}
+.prog .d{font-size:28px;line-height:1}
+.prog small{display:block;font-size:12px;font-weight:700;margin:4px 0 8px}
+.bar{height:8px;border-radius:99px;background:rgba(14,14,16,.2);overflow:hidden}
+.bar i{display:block;height:100%;background:var(--ink);border-radius:99px}
+.les{list-style:none;margin-top:10px}
+.les li{display:flex;gap:10px;align-items:flex-start;font-size:12.5px;font-weight:600;line-height:1.35;padding:7px 0;border-top:1.5px solid rgba(14,14,16,.22)}
+.les li span{flex:1}
+.les li b{font-size:11px;font-weight:800;background:var(--ink);color:var(--wh);border-radius:6px;padding:3px 6px;white-space:nowrap}
+/* ok */
+.wht.ok{height:316px}
+.svc{list-style:none;margin-top:12px}
+.svc li{display:flex;align-items:center;gap:10px;height:28px;font-weight:700;font-size:13.5px}
+.svc li i{width:10px;height:10px;border-radius:50%;background:var(--lime);border:2px solid var(--ink)}.svc li span{margin-left:auto;font-weight:600;color:#55555D}
+.meter{margin-top:10px}
+.meter .top{display:flex;justify-content:space-between;font-weight:700;font-size:13px;margin-bottom:6px}
+.meter .top b{color:#D63A1C}
+.meter .bar{background:#EDEDF0}.meter .bar i{background:var(--red);width:100%}
+.ctl{display:flex;align-items:center;gap:8px;margin-top:14px}
+.inp{display:flex;align-items:center;border:2px solid var(--ink);border-radius:10px;height:36px;padding:0 10px;width:112px;font-weight:800;font-size:14px;justify-content:space-between}
+.inp span{color:#77777F;font-weight:700;font-size:12px}
+.save{background:var(--ink);color:var(--wh);border:0;border-radius:10px;height:36px;padding:0 16px;font:800 13px Manrope}
+.ctl p{font-size:11.5px;font-weight:600;color:#55555D;line-height:1.3;margin-left:6px}
+/* tea */
+.tea{background:var(--s1);color:var(--wh);height:100%;display:flex;flex-direction:column}
+.tea .lbl i{opacity:1;display:flex;align-items:center;gap:8px;color:var(--wh)}
+.tea h2{font-size:34px;line-height:1;margin:14px 0 6px}
+.tea ol{list-style:none}
+.tea li{padding:14px 0;border-top:1px solid var(--line)}
+.meta{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:700;color:var(--mut);margin-bottom:6px}
+.tag{font-size:10.5px;font-weight:800;letter-spacing:.06em;padding:3px 7px;border-radius:6px;color:var(--ink)}
+.t-new{background:var(--pur)} .t-cp{background:var(--lime)} .t-buy{background:var(--lime)} .t-skip{background:var(--red)} .t-tb{background:var(--wh)} .t-sold{background:transparent;color:var(--red);box-shadow:inset 0 0 0 1.5px var(--red)}
+.tea li p{font-size:15px;font-weight:600;line-height:1.4}
+.tea .foot{margin-top:auto;font-size:12px;color:var(--mut);font-weight:600;display:flex;justify-content:space-between}
+</style></head><body>
+<header>
+  <span class="logo d">trading-agent</span><span class="paper" title="practice money">PAPER</span>
+  <nav><a class="on">the recap</a><a>trades</a><a>traders</a><a>the brain</a><a>settings</a></nav>
+  <div class="right">
+    <span class="chip" style="color:var(--mut)">practice: no limits fr</span>
+    <span class="chip"><i class="dot"></i>live · 22:18</span>
+    <span class="chip">🗣 gen z <i class="tog"></i></span>
+  </div>
+</header>
+<div class="alert">⏸ <span>today's free data is used up · copying paused till 00:00 UTC (02:00 your time)</span><button class="btn">change limit</button></div>
+<main class="grid">
+  <div class="col">
+    <section class="blk bag">
+      <div class="lbl">the bag 💰<i>started with 1.00 SOL · Oct 20, 05:11</i></div>
+      <div class="big d n">0.9772<span>SOL</span></div>
+      <p class="say">down <b>−0.0228 SOL (−2.3%)</b> all time. a scratch, not a crash 🩹</p>
+      <div class="row2">
+        <div class="wl">
+          <div class="wr d n">9%</div><small>W rate</small>
+          <div class="sq"><b class="w"></b><b></b><b></b><b></b><b></b><b></b><b></b><b></b><b></b><b></b><b></b></div>
+          <p>1 W out of 11 trades. avg W +0.005 vs avg L −0.003, the W hits harder</p>
+        </div>
+        <div class="chart">
+          <svg width="336" height="118" viewBox="0 0 336 118" aria-label="bag fell in steps from 1.000 to 0.977 by 07:07, flat since">
+            <line x1="0" y1="9" x2="336" y2="9" stroke="#0E0E10" stroke-opacity=".35" stroke-dasharray="3 4"/>
+            <text x="336" y="24" text-anchor="end" font-family="Manrope" font-size="10" font-weight="800" fill="#0E0E10" opacity=".6">1.000</text>
+            <path d="M0 9H8V28H14V44H19V23H23V42H30V59H35V78H39V98H332" fill="none" stroke="#0E0E10" stroke-width="3" stroke-linejoin="round"/>
+            <circle cx="330" cy="98" r="5" fill="#0E0E10"/>
+            <text x="322" y="88" text-anchor="end" font-family="Bricolage Grotesque" font-size="15" font-weight="800" fill="#0E0E10">0.977 · flat since 07:07 😴</text>
+          </svg>
+          <div class="ax"><span>05:11</span><span>07:07</span><span>now 22:18</span></div>
+        </div>
+      </div>
+      <div class="strip n">
+        <div>today<b>−0.0228</b></div><div>this week<b>−0.0228</b></div><div>worst dip<b>2.3%</b></div><div>fees we ate<b>0.0159</b></div>
+      </div>
+    </section>
+    <div class="pair">
+      <section class="blk org">
+        <div class="lbl">traders we copy<i>5 of them</i></div>
+        <table class="n"><tr><th>who</th><th>grade</th><th class="r">copy return</th><th class="r">W rate</th></tr>
+          <tr><td>4nDJ…tZ4s</td><td>0.104</td><td class="r"><span class="d">+19.0%</span></td><td class="r">75%</td></tr>
+          <tr><td>EUku…ziAo</td><td>0.047</td><td class="r"><span class="d">+7.6%</span></td><td class="r">69%</td></tr>
+          <tr><td>FtRT…2Gp7</td><td>0.020</td><td class="r"><span class="d">+3.0%</span></td><td class="r">42%</td></tr>
+          <tr><td>Hbp8…Dqcq</td><td>0.012</td><td class="r"><span class="d">+2.5%</span></td><td class="r">40%</td></tr>
+          <tr><td>8p4j…omaq</td><td>0.005</td><td class="r"><span class="d">+1.2%</span></td><td class="r">43%</td></tr>
+        </table>
+      </section>
+      <section class="blk wht">
+        <div class="lbl">past trades<i>newest first</i></div>
+        <table class="trade n">
+          <tr><td>$BBC<em>our trader sold, so we did</em></td><td class="r l">−24.5%</td></tr>
+          <tr><td>$PUMPEMON</td><td class="r l">−7.8%</td></tr>
+          <tr><td>$PACKZ</td><td class="r l">−7.3%</td></tr>
+          <tr><td>$creased</td><td class="r l">−13.6%</td></tr>
+          <tr><td>$POKEAGENTS</td><td class="r l">−4.3%</td></tr>
+          <tr><td>$RIP<em>price tanked, auto-sold</em></td><td class="r l">−29.7%</td></tr>
+          <tr class="win"><td>$POKEPAD 🏆<em style="color:#0E0E10">the one W</em></td><td class="r">+27.1%</td></tr>
+        </table>
+      </section>
+    </div>
+  </div>
+  <div class="col">
+    <section class="blk pur">
+      <div class="lbl">the brain 🧠<i>never forgets 🔒</i></div>
+      <div class="bt d">📚 just studying for now</div>
+      <div class="prog n">
+        <div><div class="d">106<span style="opacity:.5">/200</span></div><small>chances studied</small><div class="bar"><i style="width:53%"></i></div></div>
+        <div><div class="d">1<span style="opacity:.5">/30</span></div><small>trades in its test</small><div class="bar"><i style="width:3.3%"></i></div></div>
+      </div>
+      <div class="lbl" style="margin-top:20px">remembers 4 lessons</div>
+      <ul class="les">
+        <li><span>🆕 when our trader bought tiny, under 0.1 SOL → copying = L</span><b>8.5 pts</b></li>
+        <li><span>🆕 when the coin was under a minute old → L</span><b>3.6 pts</b></li>
+        <li><span>🆕 when the trader had a good grade → W</span><b>2.5 pts</b></li>
+        <li><span>🆕 when the creator spammed 5+ coins that day → W</span><b>2.2 pts</b></li>
+      </ul>
+    </section>
+    <section class="blk wht ok">
+      <div class="lbl">is it OK? 👀<i>yep, just out of data</i></div>
+      <ul class="svc">
+        <li><i></i>data collector<span>vibing</span></li>
+        <li><i></i>trader<span>vibing</span></li>
+        <li><i></i>texter<span>vibing</span></li>
+        <li><i></i>the brain<span>on schedule (next study 00:40 UTC)</span></li>
+      </ul>
+      <div class="meter n"><div class="top">data used today<b>1500 / 1500 MB · limit hit</b></div><div class="bar"><i></i></div></div>
+      <div class="ctl"><div class="inp n">1500<span>MB</span></div><button class="save">save</button><p>daily data limit.<br>MadeOnSol job stops at 90%</p></div>
+    </section>
+  </div>
+  <section class="blk tea">
+    <div class="lbl">what it's doing rn<i><i class="dot"></i>live · 22:18</i></div>
+    <h2 class="d">live tea ☕</h2>
+    <ol>
+      <li><div class="meta n">22:18<span class="tag t-new">NEW COIN</span></div><p>$ENERGY just dropped · creator aped 1.00 SOL</p></li>
+      <li><div class="meta n">22:16<span class="tag t-cp">COPIED</span></div><p>copying 4Yy3…5AeY on $RENT 🫡</p></li>
+      <li><div class="meta n">22:16<span class="tag t-buy">WE BOUGHT</span></div><p>we bought $RENT for 0.0200 SOL</p></li>
+      <li><div class="meta n">22:15<span class="tag t-skip">SKIPPED</span></div><p>skipped EUku…ziAo on $Trainooor — the creator already sold, that's giving scam</p></li>
+      <li><div class="meta n">22:15<span class="tag t-tb">TRADER BUY</span></div><p>4nDJ…tZ4s aped 0.226 SOL into $Trainooor</p></li>
+      <li><div class="meta n">22:14<span class="tag t-sold">WE SOLD</span></div><p>we sold $RENT for 0.0175 SOL (our trader sold, so we did)</p></li>
+    </ol>
+    <div class="foot"><span>newest first</span><span>see all →</span></div>
+  </section>
+</main>
+</body></html>

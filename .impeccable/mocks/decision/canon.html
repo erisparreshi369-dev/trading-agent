@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>trading-agent · overview</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0F1115;--s1:#151820;--s2:#1B1F28;--bd:#252A34;--tx:#E6E8EB;--mu:#8A929F;--fa:#5D6573;--bl:#3B82F6;--gr:#22C55E;--rd:#EF4444;--am:#F59E0B}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:1440px;height:900px;overflow:hidden;margin:0;background:var(--bg);color:var(--tx);font:400 13px/1.45 Geist,system-ui,sans-serif;position:relative}
+.m{font-variant-numeric:tabular-nums}
+.up{color:var(--gr)}.dn{color:var(--rd)}
+header{height:56px;border-bottom:1px solid var(--bd);display:flex;align-items:center;padding:0 24px;gap:12px}
+.lg{width:24px;height:24px;border-radius:6px;background:var(--bl);display:grid;place-items:center}
+.name{font-weight:600;font-size:14px}
+.badge{font:600 10.5px/1 "Geist Mono";letter-spacing:.06em;color:var(--am);border:1px solid rgba(245,158,11,.4);background:rgba(245,158,11,.08);padding:4px 7px;border-radius:5px}
+nav{display:flex;height:56px;margin-left:28px;gap:4px}
+nav a{display:flex;align-items:center;padding:0 12px;color:var(--mu);font-weight:500;border-bottom:2px solid transparent}
+nav a.on{color:var(--tx);border-bottom-color:var(--bl)}
+.r{margin-left:auto;display:flex;align-items:center;gap:8px}
+.chip{height:30px;display:flex;align-items:center;gap:8px;padding:0 11px;border:1px solid var(--bd);border-radius:8px;color:var(--mu);font-weight:500}
+.chip b{color:var(--tx);font-weight:500}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--gr);box-shadow:0 0 0 3px rgba(34,197,94,.18)}
+.sw{width:26px;height:16px;border-radius:99px;background:var(--bl);position:relative}
+.sw:after{content:"";position:absolute;right:2px;top:2px;width:12px;height:12px;border-radius:50%;background:#fff}
+.alert{position:absolute;top:72px;left:24px;right:24px;height:40px;border:1px solid rgba(245,158,11,.35);background:rgba(245,158,11,.07);border-radius:10px;display:flex;align-items:center;gap:10px;padding:0 6px 0 14px;color:#F3D9A6}
+.alert .ic{color:var(--am);font-weight:700}
+.alert .sp{margin-left:auto;color:var(--mu)}
+.btn{height:28px;padding:0 12px;border-radius:7px;border:1px solid var(--bd);background:var(--s2);color:var(--tx);font:500 12.5px Geist;display:inline-flex;align-items:center}
+.btn.p{background:var(--bl);border-color:var(--bl);color:#fff}
+.wrap{position:absolute;top:128px;left:24px;right:24px;bottom:24px;display:grid;grid-template-columns:1040px 336px;gap:16px}
+.col{display:flex;flex-direction:column;gap:16px;min-height:0}
+.card{background:var(--s1);border:1px solid var(--bd);border-radius:12px;padding:16px;overflow:hidden}
+.hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.hd h3{font-size:13px;font-weight:600}
+.hd .s{color:var(--mu);font-size:12px}
+.kpis{display:grid;grid-template-columns:1.7fr 1fr 1fr 1fr 1fr;gap:12px;height:104px}
+.kpi{padding:14px 16px}
+.kpi .l{color:var(--mu);font-size:12px;font-weight:500}
+.kpi .v{font:600 26px/1.2 Geist;letter-spacing:-.02em;font-variant-numeric:tabular-nums;margin-top:6px}
+.kpi .v small{font-size:13px;color:var(--mu);font-weight:500;margin-left:4px}
+.kpi .f{color:var(--fa);font-size:12px;margin-top:4px}
+.kpi.main{border-color:#2D3442;background:var(--s2)}
+.kpi.main .v{font-size:36px;line-height:1.1;margin-top:4px}
+.delta{font:600 12px "Geist Mono";padding:2px 6px;border-radius:5px;background:rgba(239,68,68,.12);color:var(--rd);margin-left:8px;vertical-align:middle}
+.wbar{display:flex;gap:2px;margin-top:8px}.wbar i{flex:1;height:5px;border-radius:2px;background:rgba(239,68,68,.5)}.wbar i.w{background:var(--gr)}
+.r2{display:grid;grid-template-columns:640px 384px;gap:16px;height:290px}
+.seg{display:flex;border:1px solid var(--bd);border-radius:7px;overflow:hidden}
+.seg a{padding:4px 10px;color:var(--mu);font-size:12px;font-weight:500}
+.seg a.on{background:var(--s2);color:var(--tx)}
+.leg{display:flex;gap:16px;color:var(--mu);font-size:12px}
+.leg b{font:500 12px Geist;font-variant-numeric:tabular-nums;color:var(--tx)}
+.pill{display:inline-flex;align-items:center;gap:6px;height:22px;padding:0 8px;border-radius:99px;font-size:11.5px;font-weight:500}
+.pg{background:rgba(34,197,94,.12);color:#4ADE80}.pb{background:rgba(59,130,246,.14);color:#7FB0FF}.pa{background:rgba(245,158,11,.12);color:var(--am)}.pr{background:rgba(239,68,68,.12);color:#F87171}
+.pill i{width:6px;height:6px;border-radius:50%;background:currentColor}
+.prog{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.prog .t{display:flex;justify-content:space-between;color:var(--mu);font-size:12px;margin-bottom:6px}
+.prog .t b{font:500 12px Geist;font-variant-numeric:tabular-nums;color:var(--tx)}
+.bar{height:6px;border-radius:99px;background:var(--s2);overflow:hidden}.bar i{display:block;height:100%;background:var(--bl);border-radius:99px}
+.lh{display:flex;justify-content:space-between;color:var(--mu);font-size:12px;margin:16px 0 4px}
+.les{list-style:none}
+.les li{display:flex;gap:10px;padding:6px 0;border-top:1px solid var(--bd);font-size:12.5px;line-height:1.4}
+.les li span{flex:1}
+.les li b{font:500 12px Geist;font-variant-numeric:tabular-nums;color:var(--mu);white-space:nowrap}
+.r3{display:grid;grid-template-columns:600px 424px;gap:16px;height:322px}
+.tbl{padding:0}
+.tbl .hd{padding:14px 16px 0;margin-bottom:10px}
+table{width:100%;border-collapse:collapse}
+th{font-size:11.5px;color:var(--fa);font-weight:500;text-align:left;padding:8px 16px;border-top:1px solid var(--bd);border-bottom:1px solid var(--bd);background:#12151B}
+td{padding:0 16px;height:33px;border-bottom:1px solid #1E222B}
+tr:last-child td{border-bottom:0}
+.num{text-align:right}
+td .note{color:var(--fa);font-size:12px;margin-left:8px}
+.sym{font-weight:600}
+.svc{list-style:none}
+.svc li{display:flex;align-items:center;justify-content:space-between;height:30px;border-bottom:1px solid #1E222B}
+.svc li em{font-style:normal;color:var(--fa);font-size:11.5px;margin-left:6px}
+.meter{margin-top:12px}
+.meter .t{display:flex;justify-content:space-between;font-size:12px;color:var(--mu);margin-bottom:6px}
+.meter .t b{font:500 12px Geist;font-variant-numeric:tabular-nums;color:#F87171}
+.meter .bar i{background:var(--rd);width:100%}
+.ctl{display:flex;align-items:center;gap:8px;margin-top:14px}
+.ctl label{color:var(--mu);font-size:12px;margin-right:auto}
+.inp{height:28px;width:96px;border:1px solid #333A46;border-radius:7px;background:var(--bg);display:flex;align-items:center;justify-content:space-between;padding:0 8px;font:500 12.5px Geist}
+.inp span{color:var(--fa)}
+.hint{color:var(--fa);font-size:11.5px;margin-top:8px}
+.feed{list-style:none}
+.feed li{padding:9px 0;border-top:1px solid #1E222B}
+.feed .mt{display:flex;align-items:center;gap:8px;margin-bottom:3px}
+.feed time{font:500 11.5px "Geist Mono";color:var(--fa)}
+.tg{font:600 10px/1 "Geist Mono";letter-spacing:.04em;padding:3px 5px;border-radius:4px}
+.feed p{font-size:13px;color:#C9CDD3}
+</style></head><body>
+<header>
+  <div class="lg"><svg width="14" height="14" viewBox="0 0 14 14"><path d="M1 3h4v4h3v3h5" fill="none" stroke="#fff" stroke-width="1.8" stroke-linejoin="round"/></svg></div>
+  <span class="name">trading-agent</span><span class="badge" title="practice money">PAPER</span>
+  <nav><a class="on">overview</a><a>trades</a><a>traders</a><a>the brain</a><a>settings</a></nav>
+  <div class="r">
+    <span class="chip"><i class="dot"></i><b>live</b> · <span class="m">22:18</span></span>
+    <span class="chip">🗣 <b>gen z</b><i class="sw"></i></span>
+  </div>
+</header>
+<div class="alert"><span class="ic">⏸</span>today's free data is used up · copying paused till 00:00 UTC (02:00 your time)<span class="sp">practice: no limits fr</span><a class="btn">raise limit</a></div>
+<main class="wrap">
+  <div class="col">
+    <section class="kpis">
+      <div class="card kpi main"><div class="l">the bag 💰</div><div class="v m">0.9772<small>SOL</small><span class="delta">−2.3%</span></div><div class="f">started with 1.00 SOL · Oct 20 05:11</div></div>
+      <div class="card kpi"><div class="l">all time</div><div class="v m dn">−0.0228</div><div class="f">SOL · −2.3%</div></div>
+      <div class="card kpi"><div class="l">today</div><div class="v m dn">−0.0228</div><div class="f">this week <span class="m dn">−0.0228</span></div></div>
+      <div class="card kpi"><div class="l">W rate</div><div class="v m">9%<small>1 W / 11</small></div><div class="wbar"><i class="w"></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></div>
+      <div class="card kpi"><div class="l">fees we ate</div><div class="v m">0.0159</div><div class="f">SOL, all time</div></div>
+    </section>
+    <section class="r2">
+      <div class="card">
+        <div class="hd"><div><h3>the bag over time</h3><div class="leg" style="margin-top:4px"><span>avg W <b class="up">+0.005</b></span><span>avg L <b class="dn">−0.003</b></span><span>worst dip <b>2.3%</b></span></div></div>
+          <div class="seg"><a class="on">today</a><a>this week</a><a>all time</a></div></div>
+        <svg width="608" height="200" viewBox="0 0 608 200" aria-label="bag fell in steps from 1.000 at 05:11 to 0.977 by 07:07, flat since" font-family="Geist Mono" font-size="10.5" fill="#5D6573">
+          <g stroke="#1E222B"><line x1="44" y1="27.8" x2="608" y2="27.8"/><line x1="44" y1="77.2" x2="608" y2="77.2"/><line x1="44" y1="126.6" x2="608" y2="126.6"/><line x1="44" y1="176" x2="608" y2="176"/></g>
+          <text x="36" y="31" text-anchor="end">1.000</text><text x="36" y="80" text-anchor="end">0.990</text><text x="36" y="130" text-anchor="end">0.980</text><text x="36" y="179" text-anchor="end">0.970</text>
+          <text x="70.9" y="194" text-anchor="middle">06:00</text><text x="203.8" y="194" text-anchor="middle">10:00</text><text x="335.6" y="194" text-anchor="middle">14:00</text><text x="467.4" y="194" text-anchor="middle">18:00</text><text x="608" y="194" text-anchor="end">22:00</text>
+          <line x1="44" y1="27.8" x2="608" y2="27.8" stroke="#3A4250" stroke-dasharray="3 4"/>
+          <text x="604" y="22" text-anchor="end">start 1.000</text>
+          <path d="M44 27.8H56.6V51.5H66.5V72.2H75.3V45.5H82.4V69.2H92.9V91.9H101.1V115.6H107.7V140.4H608V176H44Z" fill="#3B82F6" fill-opacity=".08"/>
+          <path d="M44 27.8H56.6V51.5H66.5V72.2H75.3V45.5H82.4V69.2H92.9V91.9H101.1V115.6H107.7V140.4H604" fill="none" stroke="#3B82F6" stroke-width="2" stroke-linejoin="round"/>
+          <circle cx="78.9" cy="45.5" r="3.5" fill="#22C55E"/>
+          <circle cx="602" cy="140.4" r="4" fill="#0F1115" stroke="#3B82F6" stroke-width="2"/>
+          <text x="594" y="130" text-anchor="end" fill="#E6E8EB" font-weight="500">0.9772 · flat since 07:07</text>
+          <text x="86" y="40" fill="#4ADE80">$POKEPAD W</text>
+        </svg>
+      </div>
+      <div class="card">
+        <div class="hd"><h3>the brain 🧠</h3><span class="pill pb"><i></i>📚 just studying for now</span></div>
+        <div class="prog">
+          <div><div class="t">chances studied<b>106/200</b></div><div class="bar"><i style="width:53%"></i></div></div>
+          <div><div class="t">trades in its test<b>1/30</b></div><div class="bar"><i style="width:3.3%"></i></div></div>
+        </div>
+        <div class="lh"><span>remembers 4 lessons</span><span>never forgets 🔒</span></div>
+        <ul class="les">
+          <li><span>🆕 when our trader bought tiny, under 0.1 SOL → copying&nbsp;=&nbsp;<span class="dn">L</span></span><b>8.5 pts</b></li>
+          <li><span>🆕 when the coin was under a minute old → <span class="dn">L</span></span><b>3.6 pts</b></li>
+          <li><span>🆕 when the trader had a good grade → <span class="up">W</span></span><b>2.5 pts</b></li>
+          <li><span>🆕 when the creator spammed 5+ coins that day&nbsp;→&nbsp;<span class="up">W</span></span><b>2.2 pts</b></li>
+        </ul>
+      </div>
+    </section>
+    <section class="r3">
+      <div class="card tbl">
+        <div class="hd"><h3>past trades</h3><span class="s">1 W · 10 L · newest first</span></div>
+        <table><tr><th>coin</th><th>result</th><th class="num">return</th><th class="num">SOL</th></tr>
+          <tr><td><span class="sym">$BBC</span><span class="note">our trader sold, so we did</span></td><td><span class="pill pr">L</span></td><td class="num m dn">−24.5%</td><td class="num m dn">−0.0048</td></tr>
+          <tr><td><span class="sym">$PUMPEMON</span></td><td><span class="pill pr">L</span></td><td class="num m dn">−7.8%</td><td class="num m" style="color:var(--fa)">—</td></tr>
+          <tr><td><span class="sym">$PACKZ</span></td><td><span class="pill pr">L</span></td><td class="num m dn">−7.3%</td><td class="num m" style="color:var(--fa)">—</td></tr>
+          <tr><td><span class="sym">$creased</span></td><td><span class="pill pr">L</span></td><td class="num m dn">−13.6%</td><td class="num m" style="color:var(--fa)">—</td></tr>
+          <tr><td><span class="sym">$POKEAGENTS</span></td><td><span class="pill pr">L</span></td><td class="num m dn">−4.3%</td><td class="num m" style="color:var(--fa)">—</td></tr>
+          <tr><td><span class="sym">$RIP</span><span class="note">price tanked, auto-sold</span></td><td><span class="pill pr">L</span></td><td class="num m dn">−29.7%</td><td class="num m" style="color:var(--fa)">—</td></tr>
+          <tr><td><span class="sym">$POKEPAD</span><span class="note">the one W 🏆</span></td><td><span class="pill pg">W</span></td><td class="num m up">+27.1%</td><td class="num m up">+0.0054</td></tr>
+        </table>
+      </div>
+      <div class="card tbl">
+        <div class="hd"><h3>traders we copy</h3><span class="s">5</span></div>
+        <table><tr><th>who</th><th class="num">grade</th><th class="num">copy return</th><th class="num">copy W rate</th></tr>
+          <tr><td class="m">4nDJ…tZ4s</td><td class="num m">0.104</td><td class="num m up">+19.0%</td><td class="num m">75%</td></tr>
+          <tr><td class="m">EUku…ziAo</td><td class="num m">0.047</td><td class="num m up">+7.6%</td><td class="num m">69%</td></tr>
+          <tr><td class="m">FtRT…2Gp7</td><td class="num m">0.020</td><td class="num m up">+3.0%</td><td class="num m">42%</td></tr>
+          <tr><td class="m">Hbp8…Dqcq</td><td class="num m">0.012</td><td class="num m up">+2.5%</td><td class="num m">40%</td></tr>
+          <tr><td class="m">8p4j…omaq</td><td class="num m">0.005</td><td class="num m up">+1.2%</td><td class="num m">43%</td></tr>
+        </table>
+      </div>
+    </section>
+  </div>
+  <aside class="col">
+    <section class="card" style="height:290px">
+      <div class="hd"><h3>is it OK?</h3><span class="pill pa"><i></i>data limit hit</span></div>
+      <ul class="svc">
+        <li>data collector<span class="pill pg"><i></i>vibing</span></li>
+        <li>trader<span class="pill pg"><i></i>vibing</span></li>
+        <li>texter<span class="pill pg"><i></i>vibing</span></li>
+        <li><span>the brain<em class="m">next study 00:40 UTC</em></span><span class="pill pb"><i></i>on schedule</span></li>
+      </ul>
+      <div class="meter"><div class="t">data used today<b>1500 / 1500 MB</b></div><div class="bar"><i></i></div></div>
+      <div class="ctl"><label>daily data limit</label><div class="inp">1500<span>MB</span></div><a class="btn p">save</a></div>
+      <div class="hint">MadeOnSol job stops at 90%</div>
+    </section>
+    <section class="card" style="flex:1">
+      <div class="hd"><h3>live tea ☕</h3><span class="s"><i class="dot" style="display:inline-block;margin-right:6px"></i>newest first</span></div>
+      <ul class="feed">
+        <li><div class="mt"><time>22:18</time><span class="tg" style="background:rgba(167,139,250,.14);color:#C4B5FD">NEW COIN</span></div><p>$ENERGY just dropped · creator aped 1.00 SOL</p></li>
+        <li><div class="mt"><time>22:16</time><span class="tg" style="background:rgba(59,130,246,.14);color:#7FB0FF">COPIED</span></div><p>copying 4Yy3…5AeY on $RENT 🫡</p></li>
+        <li><div class="mt"><time>22:16</time><span class="tg" style="background:rgba(34,197,94,.12);color:#4ADE80">WE BOUGHT</span></div><p>we bought $RENT for 0.0200 SOL</p></li>
+        <li><div class="mt"><time>22:15</time><span class="tg" style="background:rgba(245,158,11,.12);color:var(--am)">SKIPPED</span></div><p>skipped EUku…ziAo on $Trainooor — the creator already sold, that's giving scam</p></li>
+        <li><div class="mt"><time>22:15</time><span class="tg" style="background:var(--s2);color:var(--mu)">TRADER BUY</span></div><p>4nDJ…tZ4s aped 0.226 SOL into $Trainooor</p></li>
+        <li><div class="mt"><time>22:14</time><span class="tg" style="background:rgba(239,68,68,.12);color:#F87171">WE SOLD</span></div><p>we sold $RENT for 0.0175 SOL (our trader sold, so we did)</p></li>
+      </ul>
+    </section>
+  </aside>
+</main>
+</body></html>

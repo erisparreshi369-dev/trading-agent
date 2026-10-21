@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Away Message</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@500;700&family=Rubik:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--ground:#E6EBFF;--ink:#121233;--ink-2:#4A4F7A;--line:#C7D0FA;--panel:rgba(255,255,255,.78);--grape:#6B4CF5;--lime:#B6FF3B;--aqua:#3FE0D0;--pink:#FF6FB5;--w:#0E9F6E;--l:#E5484D;--sun:#FFC83D}
+*{box-sizing:border-box}html,body{width:1440px;height:900px;overflow:hidden;margin:0;background:var(--ground);color:var(--ink);font:14px/1.45 Rubik,sans-serif}
+.num{font-variant-numeric:tabular-nums}.px{font-family:"Pixelify Sans",monospace}
+.bar{height:52px;background:var(--grape);color:#fff;display:flex;align-items:center;gap:16px;padding:0 22px}
+.badge{font:700 14px "Pixelify Sans";letter-spacing:.06em;background:var(--lime);color:var(--ink);padding:5px 10px;border-radius:7px}
+.bar .nm{font-weight:700;font-size:16px}.bar .on{font-size:13px;opacity:.85}.bar .on i{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--lime);margin-right:6px}
+nav{display:flex;gap:2px;margin-left:12px}nav a{color:#E4DDFF;text-decoration:none;font-weight:600;font-size:14px;padding:7px 13px;border-radius:999px}nav a.on{background:#fff;color:var(--grape)}
+.chip{margin-left:auto;font-weight:600;font-size:13px;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.3);padding:6px 12px;border-radius:999px}
+.away{margin:14px 22px 0;display:flex;align-items:center;gap:14px;background:#FFF8DB;border:1px solid #F1DE94;border-radius:16px;padding:12px 18px}
+.away .ic{width:40px;height:40px;flex:none}
+.away b{font-weight:700}.away p{margin:0;font-size:17px}.away small{display:block;color:#7A6A2A;font-size:12.5px;font-weight:500}
+.away .st{margin-left:auto;font-weight:600;font-size:13px;background:var(--sun);padding:5px 11px;border-radius:999px}
+.grid{display:grid;grid-template-columns:600px 1fr 400px;gap:14px;padding:14px 22px;height:calc(900px - 52px - 82px)}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:18px;box-shadow:inset 0 1px 0 #fff,0 10px 26px rgba(46,52,140,.10);padding:16px 18px;min-height:0;overflow:hidden}
+h2{margin:0;font:700 18px Rubik}h2 span{font-weight:500;color:var(--ink-2);font-size:13px;margin-left:6px}
+.screen{margin-top:12px;background:#D7FAF5;border:1px solid #A6E9E0;border-radius:14px;padding:14px 18px 10px}
+.big{display:flex;align-items:baseline;gap:12px}.big b{font:700 84px/1 "Pixelify Sans";letter-spacing:-.01em}.big em{font-style:normal;font-weight:700;font-size:20px}
+.delta{font-weight:700;font-size:17px;color:var(--l);margin-top:4px}
+.chart{display:block;margin-top:8px}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:14px}
+.stat{border-top:1px solid var(--line);padding-top:8px}.stat div{color:var(--ink-2);font-size:12.5px;font-weight:600}.stat b{font:700 22px Rubik;letter-spacing:-.01em}
+.trades{margin-top:6px}.tr{display:grid;grid-template-columns:110px 1fr auto;gap:10px;padding:6px 0;border-bottom:1px solid var(--line);font-size:13.5px}.tr span{color:var(--ink-2)}.tr b{font-weight:700}
+.vibe{margin:12px 0 0;color:var(--ink-2);font-size:14px}
+.row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line);font-weight:600}.row em{margin-left:auto;font-style:normal;color:var(--ink-2);font-weight:500;font-size:12.5px}
+.dot{width:10px;height:10px;border-radius:50%;background:var(--w);box-shadow:0 0 0 3px #CDEFE2}
+.meter{margin-top:14px;font-weight:600;font-size:13px}.meter .t{height:8px;border-radius:4px;background:#F6D4D6;margin:6px 0 3px}.meter .t i{display:block;height:100%;border-radius:4px;background:var(--l)}
+.ctl{display:flex;align-items:center;gap:8px;margin-top:12px;font-weight:600;font-size:13px}
+.ctl input{width:86px;font:600 14px Rubik;padding:6px 9px;border:1px solid var(--line);border-radius:9px;background:#fff;color:var(--ink)}
+.ctl button{font:700 13px Rubik;padding:7px 15px;border:0;border-radius:9px;background:var(--grape);color:#fff}
+.brain{margin-top:18px;border-top:1px solid var(--line);padding-top:12px}
+.prog{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:8px 0}.prog div{font-size:12.5px;font-weight:600;color:var(--ink-2)}
+.prog i{display:block;height:7px;border-radius:4px;background:#E2DBFF;margin-top:4px}.prog i b{display:block;height:100%;border-radius:4px;background:var(--grape)}
+.lesson{display:flex;justify-content:space-between;font-size:13px;padding:5px 0}.lesson b{font-family:"Pixelify Sans"}
+.w{color:var(--w)}.l{color:var(--l)}
+.side{display:flex;flex-direction:column;gap:14px;min-height:0}
+.buddy{display:grid;grid-template-columns:44px 1fr auto;align-items:center;gap:2px 10px;padding:7px 0;border-bottom:1px solid var(--line)}
+.av{border-radius:50%;background:var(--aqua);justify-self:center;display:grid;place-items:center;color:var(--ink);font:700 11px "Pixelify Sans"}
+.buddy b{font-weight:700}.buddy small{grid-column:2;color:var(--ink-2);font-size:12px}.buddy .r{grid-row:1/3;grid-column:3;text-align:right;font-weight:700}.buddy .r small{display:block;font-weight:500}
+.grp{font-size:12px;font-weight:700;color:var(--ink-2);letter-spacing:.04em;margin:10px 0 2px}
+.log{flex:1}.msg{font-size:13.5px;padding:5px 0;line-height:1.4}.msg time{color:var(--ink-2);font-size:12px;margin-right:6px}.msg b{font-weight:700}
+.b-new{color:#5B5FD6}.b-cp{color:var(--w)}.b-sk{color:var(--l)}.b-tr{color:#C2338A}.b-we{color:var(--grape)}
+</style></head><body>
+<header class="bar"><span class="badge">PAPER</span><span class="nm">trading-agent</span><span class="on"><i></i>live · 22:18</span>
+  <nav><a class="on" href="#">the bag</a><a href="#">buddies</a><a href="#">the brain</a><a href="#">past trades</a></nav><span class="chip">gen z ▾</span></header>
+<div class="away">
+  <svg class="ic" viewBox="0 0 10 10" shape-rendering="crispEdges" aria-hidden="true"><rect width="10" height="10" rx="2" fill="#6B4CF5"/><rect x="2" y="3" width="2" height="2" fill="#B6FF3B"/><rect x="6" y="3" width="2" height="2" fill="#B6FF3B"/><rect x="3" y="7" width="4" height="1" fill="#fff"/></svg>
+  <div><p><b>away message:</b> brb, today's free data is used up. copying is back at 00:00 UTC (02:00 your time) ✌️</p><small>all parts vibing · practice mode: no limits fr · nothing needs you</small></div>
+  <span class="st">away till 02:00</span>
+</div>
+<main class="grid">
+  <section class="panel"><h2>The bag <span>practice money · started 1.00 SOL</span></h2>
+    <div class="screen">
+      <div class="big num"><b>0.9772</b><em>SOL</em></div>
+      <div class="delta num">−0.0228 SOL all time · −2.3% · lowkey mid, not cooked</div>
+      <svg class="chart" width="560" height="120" viewBox="0 0 560 120" aria-label="the bag over time, shape approximate">
+        <line x1="0" x2="560" y1="14" y2="14" stroke="#7FCFC4" stroke-dasharray="4 4"/>
+        <path d="M4 14H40V30H70V24H82V44H120V52H180V58H230V92H556" fill="none" stroke="#121233" stroke-width="3" stroke-linejoin="round"/>
+        <circle cx="550" cy="92" r="6" fill="#E5484D" stroke="#D7FAF5" stroke-width="3"/>
+        <text x="4" y="114" font-size="11" fill="#3E7D75" font-family="Rubik">Oct 20, 05:11 · shape approximate</text><text x="556" y="114" font-size="11" fill="#3E7D75" text-anchor="end" font-family="Rubik">rn</text></svg>
+    </div>
+    <div class="stats num">
+      <div class="stat"><div>today</div><b class="l">−0.0228</b></div>
+      <div class="stat"><div>W rate</div><b>9%</b><div>1 W of 11</div></div>
+      <div class="stat"><div>worst dip</div><b>2.3%</b></div>
+      <div class="stat"><div>fees we ate</div><b>0.0159</b></div>
+    </div>
+    <h2 style="margin-top:16px">Past trades <span>latest</span></h2>
+    <div class="trades num">
+      <div class="tr"><b>$BBC</b><span>our trader sold, so we did</span><b class="l">−24.5%</b></div>
+      <div class="tr"><b>$PUMPEMON</b><span>our trader sold, so we did</span><b class="l">−7.8%</b></div>
+      <div class="tr"><b>$RIP</b><span>price tanked, auto-sold</span><b class="l">−29.7%</b></div>
+      <div class="tr"><b>$POKEPAD</b><span>the one W so far</span><b class="w">+27.1%</b></div>
+    </div>
+  </section>
+  <section class="panel"><h2>Is it OK? <span>yep</span></h2>
+    <div class="row"><i class="dot"></i>data collector<em>pinged 6s ago</em></div>
+    <div class="row"><i class="dot"></i>trader<em>pinged 30s ago</em></div>
+    <div class="row"><i class="dot"></i>texter<em>pinged 2s ago</em></div>
+    <div class="row"><i class="dot" style="background:var(--grape);box-shadow:0 0 0 3px #E2DBFF"></i>the brain<em>studies at 00:40 UTC</em></div>
+    <div class="meter num">data used today<div class="t"><i style="width:100%"></i></div>1,500 / 1,500 MB · limit hit</div>
+    <div class="ctl">daily data limit <input value="1500" aria-label="daily data limit"> MB <button>save</button></div>
+    <div class="brain"><h2>The brain <span>just studying · never forgets</span></h2>
+      <div class="prog num"><div>chances studied 106/200<i><b style="width:53%"></b></i></div><div>test trades 1/30<i><b style="width:4%"></b></i></div></div>
+      <div class="lesson"><span>tiny buys, under 0.1 SOL</span><b class="l">L 8.5 pts</b></div>
+      <div class="lesson"><span>coin under a minute old</span><b class="l">L 3.6 pts</b></div>
+      <div class="lesson"><span>trader with a good grade</span><b class="w">W 2.5 pts</b></div>
+      <div class="lesson"><span>creator spammed 5+ coins</span><b class="w">W 2.2 pts</b></div>
+    </div>
+  </section>
+  <div class="side">
+    <section class="panel"><h2>Buddy list <span>traders we copy · 5</span></h2>
+      <div class="grp">IDLE (no trades in the last hour)</div>
+      <div class="buddy"><i class="av" style="width:40px;height:40px">A+</i><b>4nDJ…tZ4s</b><span class="r w">+19.0%<small>copy return</small></span><small>grade 0.104 · idle 15h</small></div>
+      <div class="buddy"><i class="av" style="width:32px;height:32px;background:#B9C7FF"></i><b>EUku…ziAo</b><span class="r w">+7.6%<small>copy return</small></span><small>grade 0.047 · idle 15h</small></div>
+      <div class="buddy"><i class="av" style="width:26px;height:26px;background:#FFC2E1"></i><b>FtRT…2Gp7</b><span class="r w">+3.0%<small>copy return</small></span><small>grade 0.020 · idle 15h</small></div>
+      <div class="buddy"><i class="av" style="width:23px;height:23px;background:#DCE2FF"></i><b>Hbp8…Dqcq</b><span class="r w">+2.5%<small>copy return</small></span><small>grade 0.012 · idle 16h</small></div>
+      <div class="buddy" style="border:0"><i class="av" style="width:20px;height:20px;background:#E6E9F7"></i><b>8p4j…omaq</b><span class="r w">+1.2%<small>copy return</small></span><small>grade 0.005 · idle 17h</small></div>
+    </section>
+    <section class="panel log"><h2>Live tea <span>chat log</span></h2>
+      <div class="msg num"><time>22:18</time><b class="b-new">new coin:</b> $ENERGY just dropped · creator aped 1.00 SOL</div>
+      <div class="msg num"><time>22:16</time><b class="b-cp">copied:</b> copying 4Yy3…5AeY on $RENT</div>
+      <div class="msg num"><time>22:16</time><b class="b-we">we bought:</b> $RENT for 0.0200 SOL</div>
+      <div class="msg num"><time>22:15</time><b class="b-sk">skipped:</b> EUku…ziAo on $Trainooor, the creator already sold, that's giving scam</div>
+      <div class="msg num"><time>22:15</time><b class="b-tr">trader buy:</b> 4nDJ…tZ4s aped 0.226 SOL into $Trainooor</div>
+    </section>
+  </div>
+</main>
+</body></html>
