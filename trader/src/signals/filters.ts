@@ -54,5 +54,17 @@ export function rejectReasons(f: Features, c: SignalsConfig, inCooldown: boolean
   if (reasons.length) return reasons;
   reasons.push(...onChainReasons(f, c));
   if (reasons.length === 0 && (f.score as number) < c.min_score) reasons.push(`score ${(f.score as number).toFixed(3)} < ${c.min_score}`);
+  if (reasons.length === 0) reasons.push(...brainReasons(f, c));
   return reasons;
+}
+
+/**
+ * The learning brain's vote, from what it predicted when the signal came in (stored in the
+ * features). Only a model that passed its nightly exam may vote, and its only vote is "skip".
+ */
+export function brainReasons(f: Features, c: SignalsConfig): string[] {
+  if (!c.use_brain || f.brain_active !== true || typeof f.brain_pred !== "number" || typeof f.brain_threshold !== "number") return [];
+  return f.brain_pred < f.brain_threshold
+    ? [`model expects ${(f.brain_pred * 100).toFixed(1)}% follower ROI < ${(f.brain_threshold * 100).toFixed(1)}% threshold`]
+    : [];
 }

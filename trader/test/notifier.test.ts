@@ -75,7 +75,7 @@ async function setup() {
   const reports = join(dir, "reports");
   mkdirSync(reports);
   const telegram = new Telegram(TOKEN, CHAT, tg.base, 0);
-  const n = new Notifier({ db, cfg: testConfig(), telegram, killFile: join(dir, "KILL"), reportsDir: reports, now: c.now });
+  const n = new Notifier({ db, cfg: testConfig({ notifier: { watch_services: ["collector", "trader"] } }), telegram, killFile: join(dir, "KILL"), reportsDir: reports, now: c.now });
   db.prepare("INSERT INTO paper_account (id, balance_sol, start_balance, created_at) VALUES (1, 0.98, 1, 0)").run();
   for (const s of ["collector", "trader"]) {
     db.prepare("INSERT INTO service_runs (service, state, pid, changed_at) VALUES (?, 'running', ?, ?)").run(s, process.pid, c.t - 60_000);
@@ -437,6 +437,38 @@ describe("quiet mode", () => {
     expect(await s.n.onCommand({ name: "quiet", args: "off", from: "o" })).toMatch(/^QUIET MODE · Was not on/);
     await s.n.onCommand({ name: "quiet", args: "", from: "o" });
     expect(await s.n.onCommand({ name: "quiet", args: "off", from: "o" })).toMatch(/^QUIET MODE · Over/);
+  });
+});
+
+describe("learning brain", () => {
+  it("tells the owner when the brain starts skipping trades, with what its test showed", async () => {
+    const s = await setup();
+    raiseAlert(s.db, { kind: "brain", source: "brain", text: "learning brain ON", data: {
+      active: true, studied: 412, test_taken: 41, taken_avg: -0.062, kept_avg: 0.018, skipped: 17, skipped_avg: -0.15, use_brain: true } }, s.c.t);
+    s.advance(2_000);
+    await s.n.tick();
+    expect(s.tg.texts()).toEqual([expect.stringMatching(
+      /^LEARNING BRAIN · It now skips trades it expects to lose\n[\s\S]*our rules took 41 trades, which lost 6\.2% on average\. It would have skipped 17, and the rest made 1\.8%/)]);
+  });
+});
+
+describe("/brain", () => {
+  it("shows what the learning brain remembers, from its long-term memory", async () => {
+    const s = await setup();
+    expect(await s.n.onCommand({ name: "brain", args: "", from: "o" })).toMatch(/^LEARNING BRAIN · What it remembers\nWhat happened: The learning brain has not studied yet\./);
+    s.db.prepare("INSERT INTO brain_models (trained_at, version, active, threshold, studied, model, exam) VALUES (1, 'b', 0, 0, 106, '{}', ?)")
+      .run(JSON.stringify({ checks: [{ key: "enough_signals", ok: false, have: 106, need: 200 }, { key: "skips_losers", ok: true, have: -0.07, need: "< 0" }] }));
+    const mem = s.db.prepare(`INSERT INTO brain_memory (key, kind, words, first_seen_at, last_seen_at, nights_seen, nights_same, direction, status, diff, with_n, with_avg, data)
+      VALUES (?, ?, ?, 1, 1, ?, ?, ?, ?, ?, ?, ?, ?)`);
+    mem.run("small_buy", "lesson", "our trader bought under 0.1 SOL", 4, 4, -1, "confirmed", -0.085, 34, -0.21, null);
+    mem.run("very_new", "lesson", "the coin was under 1 minute old", 4, 4, 0, "no_difference", 0.001, 52, -0.17, null);
+    mem.run("own_skips", "own_skips", "the trades it skipped", 2, 2, -1, "new", -0.1, 12, -0.1, JSON.stringify({ losers: 9 }));
+    const text = await s.n.onCommand({ name: "brain", args: "", from: "o" }) as string;
+    expect(text).toMatch(/studied 106 chances to copy a trade over 1 day and remembers 1 lesson\./);
+    expect(text).toMatch(/needs 200 studied chances to copy a trade \(it has 106\)\./);
+    expect(text).toMatch(/📌 Sure, 4 days in a row: when our trader bought under 0\.1 SOL \(the coin we trade with\), copying does worse \(8\.5 points\)\./);
+    expect(text).not.toMatch(/under 1 minute old/); // no real difference: not a lesson
+    expect(text).toMatch(/Its own skips: 12 so far, 9 of them would have lost money, lost 10% on average\./);
   });
 });
 

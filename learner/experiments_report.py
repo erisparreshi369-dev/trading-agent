@@ -173,7 +173,7 @@ def disk_md(c: sqlite3.Connection, until: int) -> list[str]:
     trades = c.execute("SELECT date(received_at / 1000, 'unixepoch'), count(*) FROM trades WHERE received_at > ? GROUP BY 1 ORDER BY 1",
                        (until - 8 * 86_400_000,)).fetchall()
     if trades:
-        out.append("- trades stored per day: " + ", ".join(f"{d} {n:,}" for d, n in trades[-7:]) + " (raw trades pruned after 30 days, tracked wallets' kept)")
+        out.append("- trades stored per day: " + ", ".join(f"{d} {n:,}" for d, n in trades[-7:]) + " (kept forever unless config collector.retention says otherwise)")
     return out
 
 

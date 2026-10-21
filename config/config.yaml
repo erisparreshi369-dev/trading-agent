@@ -54,8 +54,10 @@ collector:
     max_per_minute: 30
 
   retention:
-    raw_trades_days: 30         # trades by tracked wallets are always kept
-    holders_days: 3
+    # 0 = keep forever: the owner wants the bot (and its learning brain) to never forget anything.
+    # ~100-150 MB a day at most with the free data limit; set a number of days to delete older rows.
+    raw_trades_days: 0          # trades by tracked wallets are always kept, whatever this says
+    holders_days: 0
 
   heartbeat_s: 30
   stale_stream_s: 60
@@ -96,6 +98,9 @@ signals:
   exclude_bad_creators: false
   bad_creator_min_launches: 10  # a creator with at least this many launches...
   bad_creator_max_success: 0.01 # ...of which at most this share filled their curve, is "bad"
+  # The learning brain: once its newest model passed the exam (brain: below), skip signals it
+  # predicts will lose. It can only make the bot pickier. Its exam and its own-skips record judge it.
+  use_brain: true
 
 paper:
   start_balance_sol: 1.0
@@ -140,11 +145,11 @@ shadow:
     size_0.05: { size_sol: 0.05 }                        # cost share vs size
     size_0.1: { size_sol: 0.1 }
     size_0.25: { size_sol: 0.25 }
-    no_slip_limit: { max_slippage_bps: 100000 }
-    creator_check: { filters: { exclude_bad_creators: true } }   # live settings + skip coins from bad creators (weekly report)          # what the trades skipped for slippage would have done (weekly report)
+    no_slip_limit: { max_slippage_bps: 100000 }          # what the trades skipped for slippage would have done (weekly report)
+    creator_check: { filters: { exclude_bad_creators: true } }   # live settings + skip coins from bad creators (weekly report)
 
 notifier:
-  watch_services: [collector, trader]  # alert if one of these stops reporting
+  watch_services: [collector, trader, brain]  # alert if one of these stops reporting
   stale_after_s: 300
   daily_summary_utc: "00:05"          # daily report covering the previous UTC day
   trade_alerts: true                  # a message for every trade we follow (skipped ones go in the hourly summary)
@@ -190,3 +195,20 @@ madeonsol:
     watch_top: 20               # ranked wallets whose trades we watch, so OUR scoring can judge them
     watch_days: 7               # each candidate gets one 7-day trial
     min_hold_minutes: 1         # traders faster than this can't be copied with our delay
+
+brain:
+  # The learning brain (learner/brain.py --watch, service trading-brain; `make brain` studies once).
+  # Every time a trade's result is known it studies every signal ever recorded with what following
+  # it would have made (shadow variant all_signals: the bot's own trades and the ones it skipped),
+  # remembers every model and lesson in the database, and writes what it learned. It may make the
+  # bot skip a signal only after passing an exam on signals it never trained on, re-taken every study:
+  min_signals: 200          # studied signals with a known outcome, before it may take the exam
+  min_test_trades: 30       # trades the normal rules took inside the newest test_share of signals
+  test_share: 0.3           # newest 30% held out as the exam; it trains on the older 70%
+  min_gain: 0.02            # trades it keeps must beat all the rules' trades by 2 points of ROI on average...
+  min_kept: 10              # ...while keeping at least this many test trades...
+  skip_below_roi: 0.0       # ...and it skips a signal when its predicted follower ROI is below this
+  ridge: 10                 # how hard it resists over-fitting few examples (bigger = more careful)
+  lesson_min_n: 15          # a lesson needs this many signals on each side
+  lesson_min_diff: 0.02     # ...and a difference of at least 2 points to count as "better" or "worse"
+  own_skips_min: 10         # once it really skipped this many signals, they must have lost money on average, or it fails the exam

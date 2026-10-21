@@ -15,9 +15,9 @@
  * Rules: slang yes, confusion no. 🚨 messages still say exactly what to type. No jargon words
  * (same list as plain), no addresses, round numbers, SOL explained the first time.
  */
-import { clock, dayName, duration, plural, size, sol, times, token, TRADES_TO_JUDGE, type ActivityFacts, type BuyFacts, type Counted, type Ctx,
+import { clock, dayName, duration, plural, size, sol, times, token, TRADES_TO_JUDGE, type ActivityFacts, type BrainFacts, type BrainMemoryFacts, type BuyFacts, type Counted, type Ctx,
   type Explained, type MissedFacts, type PnlFacts, type ReportFacts, type SellFacts, type SkipFacts, type StatusFacts, type TokenRef, type Verdict,
-  type WhyEvent, type PeriodResult, KEEPS_RESTARTING } from "./messages.js";
+  type WhyEvent, type PeriodResult, type SettingChange, KEEPS_RESTARTING } from "./messages.js";
 
 // everything else (types, number helpers, isScamSkip, STOP_YES/NO, ...) is shared with plain
 export * from "./messages.js";
@@ -102,6 +102,7 @@ export const WORDS: [string, string][] = [
   ["emergency stop", "stops all trading instantly and sells everything. you start it with /stop."],
   ["daily loss limit", "if we lose too much in one day, the bot stops buying until tomorrow."],
   ["data collector", "the part of the bot that watches the market."],
+  ["learning brain", "the part of the bot that studies again after every trade, never forgets, and may skip trades it thinks will flop."],
   ["trading brain", "the part of the bot that decides what to copy and makes the trades."],
   ["message bot", "the part of the bot that sends you these texts."],
   ["data", "the market info the bot reads. we get a free amount every day."],
@@ -113,6 +114,7 @@ const PARTS: Record<string, { name: string; whileDown: string }> = {
   trader: { name: "the trading brain", whileDown: "while it's down the bot can't buy or sell, not even trades that are open." },
   notifier: { name: "the message bot", whileDown: "while it's down you get no texts." },
   score: { name: "the nightly trader check", whileDown: "" },
+  brain: { name: "the learning brain", whileDown: "while it's down the bot keeps trading with what the brain learned last, it just stops learning." },
   weekly: { name: "the weekly report maker", whileDown: "" },
   logrotate: { name: "the log cleaner", whileDown: "" },
   dashboard: { name: "the dashboard (the web page)", whileDown: "" },
@@ -388,6 +390,7 @@ export function jobFailed(c: Ctx, job: string): string {
     score: { name: "the nightly trader check", effect: "we keep copying yesterday's list of traders.", step: onComputer("make score", "runs the check again") },
     weekly: { name: "the weekly report", effect: "trading is fine. only the report is missing.", step: onComputer("make weekly", "makes the report again") },
     intel: { name: "the nightly MadeOnSol helper job", effect: "trading is fine. we just keep yesterday's creator records.", step: onComputer("make logs S=intel", "shows what went wrong") },
+    brain: { name: "the learning brain", effect: "trading is fine. the bot keeps using what the brain learned last, it just stops learning.", step: onComputer("make restart", "starts it again") },
     logrotate: { name: "the log cleaner", effect: "old log files didn't get cleaned. if it keeps happening the disk slowly fills up.", step: onComputer("df -h", "shows how full the disk is") },
   };
   const w = what[job] ?? { name: "a planned job", effect: "trading isn't directly affected.", step: onComputer("make status", "shows what's running") };
@@ -460,6 +463,87 @@ export function helperBudget(c: Ctx, d: { pct: number; used: number; limit: numb
     extra: ["trading doesn't care: the bot never waits for MadeOnSol."],
     todo: d.pct >= 90 ? `nothing, the requests reset by themselves at ${midnight(c)}.` : NOTHING,
     details: ["MadeOnSol tells us how coin creators did before and lists good traders.", `the free plan has ${d.limit} requests a day.`],
+  });
+}
+
+const madeOrLost = (x: number) => `${x >= 0 ? "made" : "lost"} ${plainPct(x)}`;
+
+const LESSON_GZ: Record<string, string> = {
+  two_traders: "2+ of our traders aped in", dev_sold: "the creator already dipped (sold half+)", very_new: "the coin was under a minute old",
+  older: "the coin was 10+ minutes old", big_buy: "our trader went big, 0.5+ SOL", small_buy: "our trader bought tiny, under 0.1 SOL",
+  concentrated: "the 10 biggest owners had 40%+", serial_creator: "the creator spammed 5+ coins that day", thin: "under 5 SOL was in the coin",
+  deep: "30+ SOL was in the coin", good_trader: "the trader had a good grade", launch_unseen: "we missed the coin's launch",
+  bad_creator: "the creator's coins basically never took off",
+};
+
+export function brainMemory(_c: Ctx, f: BrainMemoryFacts): string {
+  if (!f.nights) {
+    return render({ title: "LEARNING BRAIN · What it remembers", happened: "the learning brain hasn't studied yet.", mood: "normal",
+      why: "it hits the books as soon as the first trades have a result.", todo: NOTHING });
+  }
+  const needs = f.missing.map((x) => ({
+    enough_signals: `${x.need} chances studied (has ${x.have})`,
+    enough_test_trades: `${x.need} trades in its test (has ${x.have})`,
+    beats_rules: "to beat our normal rules in its test",
+    own_skips_right: "its skips to actually flop",
+  } as Record<string, string>)[x.key]).filter(Boolean).join(" and ");
+  const pts = (d: number | null) => `${(Math.abs(d ?? 0) * 100).toFixed(1)} pts`;
+  const line = (m: BrainMemoryFacts["memory"][number]) => {
+    const w = LESSON_GZ[m.key] ?? m.words;
+    const better = m.direction > 0 ? "W" : "L";
+    if (m.status === "confirmed") return `📌 locked in, ${m.nightsSame} days straight: when ${w}, copying = ${better} (${pts(m.diff)}).`;
+    if (m.status === "changed_mind") return `🔄 changed its mind: when ${w}, copying is now a ${better} (${pts(m.diff)}).`;
+    if (m.status === "fading") return `🌫️ not sure anymore: when ${w}, it barely matters now.`;
+    return `🆕 new: when ${w}, copying = ${better} (${pts(m.diff)}).`;
+  };
+  const o = f.ownSkips;
+  return render({
+    title: "LEARNING BRAIN · What it remembers",
+    happened: `it studied ${f.studied} chances to copy over ${f.nights} day${f.nights === 1 ? "" : "s"} and remembers ${f.remembered} lesson${f.remembered === 1 ? "" : "s"}. it never deletes anything 🔒`,
+    mood: "normal",
+    why: f.active ? "it passed its test, so it skips trades it thinks will flop." : `it's just studying for now.${needs ? ` before it can skip trades it needs ${needs}.` : ""}`,
+    todo: NOTHING,
+    details: [
+      ...(f.memory.length ? f.memory.map(line) : ["no lessons yet: it needs more trades to compare."]),
+      o && o.n > 0 && `its own skips: ${o.n} so far, ${o.losers} would've flopped${o.avg !== null ? `, ${madeOrLost(o.avg)} on average` : ""}.`,
+    ],
+  });
+}
+
+export function brainChanged(_c: Ctx, b: BrainFacts): string {
+  const result = b.takenAvg !== null && b.keptAvg !== null
+    ? `in its test, our rules took ${b.testTrades} trades, which ${madeOrLost(b.takenAvg)} on average. it would've skipped ${b.skipped ?? 0}, and the rest ${madeOrLost(b.keptAvg)} on average.`
+    : "";
+  const off = "to switch it off yourself: set use_brain to false in config/config.yaml and restart the bot.";
+  if (b.active && !b.allowed) {
+    return render({
+      title: "LEARNING BRAIN · Passed its test, but switched off",
+      happened: "the learning brain passed its test, but it's switched off in the settings, so it just keeps studying.",
+      mood: "normal",
+      why: result || "it got better at telling Ws from Ls.",
+      todo: "nothing. wanna let it skip trades it thinks will flop? set use_brain to true in config/config.yaml and restart the bot.",
+      details: [`it studied ${b.studied} chances to copy.`],
+    });
+  }
+  if (b.active) {
+    return render({
+      title: "LEARNING BRAIN · It now skips trades it expects to lose",
+      happened: "the learning brain passed its test 🧠 from now on it skips a chance to copy when it thinks that trade will flop.",
+      mood: "good",
+      why: result || "it got better at telling Ws from Ls.",
+      extra: ["it can only skip trades. it never buys more, never goes bigger and never touches the safety limits."],
+      todo: NOTHING,
+      details: [`it studied ${b.studied} chances to copy. it retakes the test after every trade.`,
+        "if it starts flopping, it goes back to just studying by itself.", off],
+    });
+  }
+  return render({
+    title: "LEARNING BRAIN · Back to only studying",
+    happened: "the learning brain didn't pass its latest test, so it stopped skipping trades.",
+    mood: "normal",
+    why: "our normal rules run the show again. it keeps studying after every trade and starts skipping again once it passes.",
+    todo: NOTHING,
+    details: [`it studied ${b.studied} chances to copy.`, result],
   });
 }
 
@@ -596,6 +680,7 @@ export function help(): string {
       "/explain: reply to one of my texts with this and i'll explain it simpler.",
       "/words: what my words mean.",
       "/why MOON: what the bot did with a coin, and why.",
+      "/brain: what the learning brain figured out and remembers.",
       "/quiet: no texts for 8 hours, except 🚨 ones. /quiet off ends it.",
       "/stop: emergency stop. sells everything and stops trading. i'll ask you first.",
     ],
@@ -631,6 +716,8 @@ interface Explainer {
 }
 
 const EXPLAINERS: Explainer[] = [
+  { match: /LEARNING BRAIN/, simple: () => "after every trade the learning brain studies again every trade we could've copied and what it would've made. it can only skip trades, and only after passing a test.",
+    example: "like a friend who has to pass a quiz before they're allowed to give you advice, and retakes it after every lesson." },
   { match: /TRADE OPENED/, simple: () => "we saw a good trader buy a coin, so we bought the same coin.", example: "copying the friend who's cracked at the game: they move, we move." },
   { match: /TRADE CLOSED/, simple: () => "we sold a coin we had. the text says if it was a W or an L.", example: "buy a skin for 10, sell it for 12: +2 W. sell it for 8: −2 L." },
   { match: /TRADE NOT DONE/, simple: () => "we wanted to buy a coin, but the buy didn't work, so we bought nothing.", example: "you go to cop the drop, but the price went up while you were in line, so you skip." },

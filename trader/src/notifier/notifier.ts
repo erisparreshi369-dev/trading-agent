@@ -270,6 +270,13 @@ export class Notifier {
         case "madeonsol_budget":
           ok = await this.say(M.helperBudget(c, { pct: Number(data.pct), used: Number(data.used), limit: Number(data.limit) }));
           break;
+        case "brain":
+          ok = await this.say(M.brainChanged(c, {
+            active: !!data.active, allowed: data.use_brain !== false, studied: Number(data.studied ?? 0), testTrades: Number(data.test_taken ?? 0),
+            takenAvg: data.taken_avg == null ? null : Number(data.taken_avg), keptAvg: data.kept_avg == null ? null : Number(data.kept_avg),
+            skipped: data.skipped == null ? null : Number(data.skipped),
+          }));
+          break;
         case "startup_blocked":
           ok = await this.say(M.startupBlocked(c, String(data.why ?? "")), { urgent: true });
           break;
@@ -437,6 +444,8 @@ export class Notifier {
         return c.replyText ? M.explain(c.replyText) : M.explainHowTo();
       case "words":
         return M.words();
+      case "brain":
+        return M.brainMemory(ctx, brainMemoryFacts(this.d.db));
       case "start":
       case "help":
         return M.help();

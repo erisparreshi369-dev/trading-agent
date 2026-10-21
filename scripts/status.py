@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parent.parent
 DB = Path(os.environ.get("DB_PATH", ROOT / "data/trading.db"))
 if not DB.is_absolute():
     DB = ROOT / DB
-SERVICES = ["collector", "trader", "notifier"]
+SERVICES = ["collector", "trader", "notifier", "brain"]
 TIMERS = ["score", "weekly", "logrotate", "intel"]
 STALE_S = 300
 
@@ -133,6 +133,10 @@ def main() -> int:
         elif svc == "trader":
             flags = (f" {R}KILL SWITCH ON{X}" if i.get("killed") else "") + (f" {Y}halted today (daily loss cap){X}" if i.get("haltedToday") else "")
             print(f"  {D}{'':<10} mode={i.get('mode')} tracked={i.get('tracked')} signals={i.get('signals', 0)} entered={i.get('entered', 0)} errors={i.get('errors', 0)}{X}{flags}")
+        elif svc == "brain":
+            last = i.get("last") or {}
+            print(f"  {D}{'':<10} studies since start={i.get('studies', 0)}  last study {ago(last.get('at'))}: {last.get('studied', 0)} signals, "
+                  f"{'ACTIVE (may skip predicted losers)' if last.get('active') else 'studying only'}{X}")
 
     dash = systemd_state("dashboard")
     print(f"  {'dashboard':<10} {G + 'up' + X if dash == 'active' else R + dash + X}  {B}http://localhost:8080{X}  {D}(read-only, live){X}")

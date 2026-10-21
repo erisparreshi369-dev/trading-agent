@@ -67,6 +67,7 @@ export function samples(M: Messages = Plain): { name: string; text: string }[] {
     ["job failed: weekly", M.jobFailed(ctx, "weekly")],
     ["job failed: logrotate", M.jobFailed(ctx, "logrotate")],
     ["job failed: intel", M.jobFailed(ctx, "intel")],
+    ["job failed: brain", M.jobFailed(ctx, "brain")],
     ["job failed: other", M.jobFailed(ctx, "drill")],
     ["kill: drawdown", M.killSwitch(ctx, "max drawdown: equity 0.6950 < 70% of start 1", 0.695, 1)],
     ["kill: server", M.killSwitch(ctx, "make kill", 0.98, 1)],

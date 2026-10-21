@@ -6,11 +6,12 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 UNIT_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
 NODE="$(command -v node)"
-SERVICES=(collector trader notifier dashboard)
-TIMERS=(score weekly logrotate intel)
+SERVICES=(collector trader notifier dashboard brain)
+TIMERS=(score weekly logrotate intel youtube)
+RETIRED=(trading-brain.timer) # the brain studied nightly before it learned after every trade
 
 if [ "${1:-}" = "--uninstall" ]; then
-  systemctl --user disable --now $(printf 'trading-%s.service ' "${SERVICES[@]}") $(printf 'trading-%s.timer ' "${TIMERS[@]}") 2>/dev/null || true
+  systemctl --user disable --now $(printf 'trading-%s.service ' "${SERVICES[@]}") $(printf 'trading-%s.timer ' "${TIMERS[@]}") "${RETIRED[@]}" 2>/dev/null || true
   rm -f "$UNIT_DIR"/trading-*
   systemctl --user daemon-reload
   echo "uninstalled"
@@ -34,6 +35,7 @@ fi
 mkdir -p "$UNIT_DIR" "$ROOT/logs" "$ROOT/reports"
 chmod 750 "$ROOT/logs" # logrotate skips directories other users can write to
 chmod +x "$ROOT/scripts/notify-failure.sh"
+for u in "${RETIRED[@]}"; do systemctl --user disable --now "$u" 2>/dev/null || true; rm -f "$UNIT_DIR/$u"; done
 for f in "$ROOT"/deploy/systemd/*; do
   sed -e "s|@ROOT@|$ROOT|g" -e "s|@NODE@|$NODE|g" "$f" > "$UNIT_DIR/$(basename "$f")"
 done

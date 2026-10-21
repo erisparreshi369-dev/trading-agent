@@ -363,10 +363,25 @@ describe("Collector: retention", () => {
     ins.run("c", Date.now(), key());
     db.prepare("INSERT INTO token_holders (mint, wallet, balance, updated_at) VALUES ('M', 'W', 1, ?), ('M', 'V', 1, ?)").run(old, Date.now());
     db.prepare("INSERT INTO watchlist (address, kind, until, priority) VALUES ('A', 'curve', ?, 2)").run(old);
-    const c = new Collector({ db, cfg: baseCfg({ pumpportal_streams: false }) });
+    const c = new Collector({ db, cfg: baseCfg({ pumpportal_streams: false, retention: { raw_trades_days: 30, holders_days: 3 } }) });
     c.prune();
     expect(db.prepare("SELECT signature FROM trades ORDER BY signature").all()).toEqual([{ signature: "b" }, { signature: "c" }]);
     expect(db.prepare("SELECT wallet FROM token_holders").all()).toEqual([{ wallet: "V" }]);
+    expect(count(db, "SELECT count(*) n FROM watchlist")).toBe(0);
+  });
+
+  it("retention 0 keeps every trade and holder row forever (expired watches still go)", () => {
+    const db = openDb(":memory:");
+    const ancient = Date.now() - 900 * 86_400_000;
+    db.prepare(`INSERT INTO trades (signature, ev_index, received_at, mint, wallet, is_buy, sol_lamports, token_amount, source)
+      VALUES ('a', 0, ?, 'M', ?, 1, 1, 1, 't')`).run(ancient, key());
+    db.prepare("INSERT INTO token_holders (mint, wallet, balance, updated_at) VALUES ('M', 'W', 1, ?)").run(ancient);
+    db.prepare("INSERT INTO watchlist (address, kind, until, priority) VALUES ('A', 'curve', ?, 2)").run(ancient);
+    const cfg = baseCfg({ pumpportal_streams: false });
+    const c = new Collector({ db, cfg: { ...cfg, retention: { raw_trades_days: 0, holders_days: 0 } } });
+    c.prune();
+    expect(count(db, "SELECT count(*) n FROM trades")).toBe(1);
+    expect(count(db, "SELECT count(*) n FROM token_holders")).toBe(1);
     expect(count(db, "SELECT count(*) n FROM watchlist")).toBe(0);
   });
 });

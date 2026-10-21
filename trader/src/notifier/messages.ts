@@ -198,6 +198,7 @@ export const WORDS: [string, string][] = [
   ["emergency stop", "stops all trading at once and sells everything. You start it with /stop."],
   ["daily loss limit", "if we lose too much in one day, the bot stops buying until the next day."],
   ["data collector", "the part of the bot that watches the market."],
+  ["learning brain", "the part of the bot that studies again after every trade, remembers everything, and may skip trades it expects to lose."],
   ["trading part", "the part of the bot that decides what to copy and makes the trades."],
   ["message part", "the part of the bot that sends you these messages."],
   ["data", "the market information the bot reads. We get a free amount every day."],
@@ -209,6 +210,7 @@ const PARTS: Record<string, { name: string; whileDown: string }> = {
   trader: { name: "the trading part", whileDown: "While it is down, the bot cannot buy or sell, not even trades that are open." },
   notifier: { name: "the message part", whileDown: "While it is down, you get no messages." },
   score: { name: "the nightly trader check", whileDown: "" },
+  brain: { name: "the learning brain", whileDown: "While it is down, the bot keeps trading with what the brain learned last, but it stops learning." },
   weekly: { name: "the weekly report maker", whileDown: "" },
   logrotate: { name: "the log cleaner", whileDown: "" },
   dashboard: { name: "the dashboard (the web page)", whileDown: "" },
@@ -567,6 +569,7 @@ export function jobFailed(c: Ctx, job: string): string {
     score: { name: "The nightly trader check", effect: "We keep copying yesterday's list of traders.", step: onComputer("make score", "this runs the check again") },
     weekly: { name: "The weekly report", effect: "Trading is not affected. Only the report is missing.", step: onComputer("make weekly", "this makes the report again") },
     intel: { name: "The nightly MadeOnSol helper job", effect: "Trading is not affected. We just keep yesterday's creator records.", step: onComputer("make logs S=intel", "this shows what went wrong") },
+    brain: { name: "The learning brain", effect: "Trading is not affected. The bot keeps using what the brain learned last, but it stops learning.", step: onComputer("make restart", "this starts it again") },
     logrotate: { name: "The log cleaner", effect: "Old log files were not cleaned. If this keeps happening, the disk slowly fills up.", step: onComputer("df -h", "this shows how full the disk is") },
   };
   const w = what[job] ?? { name: "A planned job", effect: "Trading is not directly affected.", step: onComputer("make status", "this shows what is running") };
@@ -648,6 +651,107 @@ export function helperBudget(c: Ctx, d: { pct: number; used: number; limit: numb
     extra: ["Trading is not affected: the bot never waits for MadeOnSol."],
     todo: d.pct >= 90 ? `Nothing. The requests start again by itself at ${midnight(c)}.` : NOTHING,
     details: ["MadeOnSol gives us the past results of coin creators and lists of good traders.", `The free plan has ${d.limit} requests a day.`],
+  });
+}
+
+export interface BrainFacts {
+  active: boolean;
+  /** config signals.use_brain: may it act when it passes? */
+  allowed: boolean;
+  studied: number;
+  testTrades: number;
+  takenAvg: number | null;
+  keptAvg: number | null;
+  skipped: number | null;
+}
+
+const madeOrLost = (x: number) => `${x >= 0 ? "made" : "lost"} ${plainPct(x)}`;
+
+export interface BrainMemoryFacts {
+  studied: number;
+  nights: number;
+  /** lessons in long-term memory (with a real difference) */
+  remembered: number;
+  active: boolean;
+  /** exam checks it still fails */
+  missing: { key: string; have: number | null; need: number | null }[];
+  /** strongest and most recent memories, best first */
+  memory: { key: string; words: string; status: string; nightsSame: number; direction: number; diff: number | null }[];
+  ownSkips: { n: number; losers: number; avg: number | null } | null;
+}
+
+const brainNeeds = (m: BrainMemoryFacts["missing"], words: Record<string, (h: number | null, n: number | null) => string>) =>
+  m.map((x) => words[x.key]?.(x.have, x.need)).filter(Boolean).join(" and ");
+
+/** /brain: what the learning brain remembers. */
+export function brainMemory(_c: Ctx, f: BrainMemoryFacts): string {
+  if (!f.nights) {
+    return render({ title: "LEARNING BRAIN · What it remembers", happened: "The learning brain has not studied yet.", mood: "normal",
+      why: "It studies as soon as the first trades have a result.", todo: NOTHING });
+  }
+  const needs = brainNeeds(f.missing, {
+    enough_signals: (h, n) => `${n} studied chances to copy a trade (it has ${h})`,
+    enough_test_trades: (h, n) => `${n} trades in its test (it has ${h})`,
+    beats_rules: () => "to beat our normal rules in its test",
+    own_skips_right: () => "the trades it skipped to really lose money",
+  });
+  const pts = (d: number | null) => `${(Math.abs(d ?? 0) * 100).toFixed(1)} points`;
+  const line = (m: BrainMemoryFacts["memory"][number]) => {
+    const better = m.direction > 0 ? "better" : "worse";
+    if (m.status === "confirmed") return `📌 Sure, ${m.nightsSame} days in a row: when ${m.words}, copying does ${better} (${pts(m.diff)}).`;
+    if (m.status === "changed_mind") return `🔄 Changed its mind: when ${m.words}, copying now does ${better} (${pts(m.diff)}).`;
+    if (m.status === "fading") return `🌫️ Not sure anymore: when ${m.words}, it makes little difference now.`;
+    return `🆕 New: when ${m.words}, copying does ${better} (${pts(m.diff)}).`;
+  };
+  const o = f.ownSkips;
+  return render({
+    title: "LEARNING BRAIN · What it remembers",
+    happened: `It studied ${f.studied} chances to copy a trade over ${f.nights} day${f.nights === 1 ? "" : "s"} and remembers ${f.remembered} lesson${f.remembered === 1 ? "" : "s"}. It never deletes anything.`,
+    mood: "normal",
+    why: f.active ? "It passed its test, so it skips trades it expects to lose." : `It is only studying for now.${needs ? ` Before it may skip trades it needs ${needs}.` : ""}`,
+    todo: NOTHING,
+    details: [
+      ...(f.memory.length ? f.memory.map(line) : ["No lessons yet: it needs more trades to compare."]),
+      o && o.n > 0 && `Its own skips: ${o.n} so far, ${o.losers} of them would have lost money${o.avg !== null ? `, ${madeOrLost(o.avg)} on average` : ""}.`,
+    ],
+  });
+}
+
+/** The learning brain passed (or failed) its test (re-taken after every trade): it starts (or stops) skipping trades it expects to lose. */
+export function brainChanged(_c: Ctx, b: BrainFacts): string {
+  const result = b.takenAvg !== null && b.keptAvg !== null
+    ? `In its test, our rules took ${b.testTrades} trades, which ${madeOrLost(b.takenAvg)} on average. It would have skipped ${b.skipped ?? 0}, and the rest ${madeOrLost(b.keptAvg)} on average.`
+    : "";
+  const off = "To switch it off yourself: set use_brain to false in config/config.yaml and restart the bot.";
+  if (b.active && !b.allowed) {
+    return render({
+      title: "LEARNING BRAIN · Passed its test, but switched off",
+      happened: "The learning brain passed its test, but it is switched off in the settings, so it only keeps studying.",
+      mood: "normal",
+      why: result || "It got better at telling good trades from bad ones.",
+      todo: "Nothing. To let it skip trades it expects to lose: set use_brain to true in config/config.yaml and restart the bot.",
+      details: [`It studied ${b.studied} chances to copy a trade.`],
+    });
+  }
+  if (b.active) {
+    return render({
+      title: "LEARNING BRAIN · It now skips trades it expects to lose",
+      happened: "The learning brain passed its test. From now on it skips a chance to copy a trade when it expects that trade to lose money.",
+      mood: "good",
+      why: result || "It got better at telling good trades from bad ones.",
+      extra: ["It can only skip trades. It never buys more, never uses bigger amounts and never changes the safety limits."],
+      todo: NOTHING,
+      details: [`It studied ${b.studied} chances to copy a trade. It takes the test again after every trade.`,
+        "If it does worse later, it goes back to only studying by itself.", off],
+    });
+  }
+  return render({
+    title: "LEARNING BRAIN · Back to only studying",
+    happened: "The learning brain did not pass its latest test, so it no longer skips any trades.",
+    mood: "normal",
+    why: "Our normal rules decide alone again. It keeps studying after every trade and starts skipping again when it passes.",
+    todo: NOTHING,
+    details: [`It studied ${b.studied} chances to copy a trade.`, result],
   });
 }
 
@@ -787,6 +891,7 @@ export function help(): string {
       "/explain: reply to one of my messages with this, and I explain it more simply.",
       "/words: what my special words mean.",
       "/why MOON: what the bot did with a coin, and why.",
+      "/brain: what the learning brain has learned and remembers.",
       "/quiet: no messages for 8 hours, except 🚨 ones. /quiet off ends it.",
       "/stop: emergency stop. Sells everything and stops trading. I ask you first.",
     ],
@@ -824,6 +929,8 @@ interface Explainer {
 }
 
 const EXPLAINERS: Explainer[] = [
+  { match: /LEARNING BRAIN/, simple: () => "After every trade the learning brain studies again all the trades we could have copied and what they would have made. It may only skip trades, and only after passing a test.",
+    example: "Like a student who must pass an exam before being allowed to give advice, and takes the exam again after every lesson." },
   { match: /TRADE OPENED/, simple: () => "We saw a good trader buy a coin, and we bought the same coin.",
     example: "Like copying a friend who is good at a game: when they make a move, we make the same move." },
   { match: /TRADE CLOSED/, simple: () => "We sold a coin we had bought. The message says if we made or lost money.",

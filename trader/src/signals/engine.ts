@@ -1,6 +1,7 @@
 import type { SignalsConfig } from "../lib/config.js";
 import type { DB } from "../lib/db.js";
 import { log } from "../lib/log.js";
+import { Brain } from "../brain/model.js";
 import { bondingCurve, canonicalPool } from "../collector/pools.js";
 import type { PaperEngine, TradeRow } from "../paper/engine.js";
 import { cheapReasons, rejectReasons, type Features } from "./filters.js";
@@ -46,6 +47,7 @@ export interface SignalResult {
 export class SignalEngine {
   private adjust: ScoreAdjuster = () => 1;
   private observer?: SignalObserver;
+  private brain: Brain;
 
   constructor(
     private db: DB,
@@ -53,7 +55,9 @@ export class SignalEngine {
     private info: TokenInfoSource,
     private paper: PaperEngine,
     private now: () => number = Date.now,
-  ) {}
+  ) {
+    this.brain = new Brain(db, now);
+  }
 
   /**
    * Creator record and early-buyer score from OUR database (written by the daily MadeOnSol job),
@@ -134,6 +138,12 @@ export class SignalEngine {
 
     const score = ((wallet?.score ?? 0) + 0.05 * Math.max(0, (f.confirmations as number) - 1)) * this.adjust(f);
     f.score = +score.toFixed(4);
+    // the learning brain's prediction, stored with every signal (it votes only once it passed its exam: filters.ts brainReasons)
+    try {
+      Object.assign(f, this.brain.features(f));
+    } catch (err) {
+      log.warn({ err: String(err) }, "learning brain failed to predict; deciding without it");
+    }
     const reasons = rejectReasons(f, c, inCooldown);
     let decision: SignalResult["decision"] = reasons.length ? "reject" : "enter";
     const signalId = Number(this.db.prepare(`INSERT INTO signals (ts, wallet, mint, leader_trade_id, venue, score, decision, reasons, features)

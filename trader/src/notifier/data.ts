@@ -283,3 +283,30 @@ export function whyFacts(db: DB, query: string, limit = 8): WhyResult {
   }));
   return { found: true, token: tok, events, total, sameName: candidates.length };
 }
+
+const MEMORY_ORDER: Record<string, number> = { confirmed: 0, changed_mind: 1, new: 2, fading: 3 };
+
+/** What the learning brain remembers (brain_memory, brain_models), for /brain. */
+export function brainMemoryFacts(db: DB, limit = 6): BrainMemoryFacts {
+  const has = (t: string) => !!db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(t);
+  if (!has("brain_models") || !has("brain_memory")) return { studied: 0, nights: 0, remembered: 0, active: false, missing: [], memory: [], ownSkips: null };
+  const last = db.prepare("SELECT active, studied, exam FROM brain_models ORDER BY id DESC LIMIT 1").get() as { active: number; studied: number; exam: string } | undefined;
+  const nights = (db.prepare("SELECT count(DISTINCT trained_at / 86400000) n FROM brain_models").get() as { n: number }).n; // UTC days, not runs
+  const rows = db.prepare("SELECT key, kind, words, status, nights_same, direction, diff, with_n, with_avg, data FROM brain_memory").all() as
+    { key: string; kind: string; words: string; status: string; nights_same: number; direction: number; diff: number | null; with_n: number | null; with_avg: number | null; data: string | null }[];
+  const lessons = rows.filter((r) => r.kind === "lesson" && r.status !== "no_difference");
+  const own = rows.find((r) => r.kind === "own_skips");
+  let checks: { key: string; ok: boolean; have: number | null; need: number | null }[] = [];
+  try {
+    checks = last ? (JSON.parse(last.exam).checks ?? []) : [];
+  } catch { /* an unreadable exam just shows no progress */ }
+  return {
+    studied: last?.studied ?? 0, nights, remembered: lessons.length, active: !!last?.active,
+    missing: checks.filter((c) => !c.ok).map((c) => ({ key: c.key, have: typeof c.have === "number" ? c.have : null, need: typeof c.need === "number" ? c.need : null })),
+    memory: lessons
+      .sort((a, b) => (MEMORY_ORDER[a.status] ?? 9) - (MEMORY_ORDER[b.status] ?? 9) || Math.abs(b.diff ?? 0) - Math.abs(a.diff ?? 0))
+      .slice(0, limit)
+      .map((r) => ({ key: r.key, words: r.words, status: r.status, nightsSame: r.nights_same, direction: r.direction, diff: r.diff })),
+    ownSkips: own ? { n: own.with_n ?? 0, losers: Number(JSON.parse(own.data ?? "{}").losers ?? 0), avg: own.with_avg } : null,
+  };
+}

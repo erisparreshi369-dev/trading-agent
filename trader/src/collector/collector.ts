@@ -614,11 +614,12 @@ export class Collector {
     });
   }
 
-  /** Drop old raw data in small chunks so the writer never holds the lock for long. */
+  /** Drop old raw data in small chunks so the writer never holds the lock for long. Retention 0 = keep forever. */
   prune(): void {
     const { db, cfg } = this.d;
-    const tradeCutoff = this.now() - cfg.retention.raw_trades_days * 86_400_000;
-    const holderCutoff = this.now() - cfg.retention.holders_days * 86_400_000;
+    // a cutoff of 0 matches nothing: received_at / updated_at are always > 0
+    const tradeCutoff = cfg.retention.raw_trades_days > 0 ? this.now() - cfg.retention.raw_trades_days * 86_400_000 : 0;
+    const holderCutoff = cfg.retention.holders_days > 0 ? this.now() - cfg.retention.holders_days * 86_400_000 : 0;
     const delTrades = db.prepare(`DELETE FROM trades WHERE id IN (SELECT id FROM trades WHERE received_at < ?
       AND wallet NOT IN (SELECT wallet FROM tracked_wallets) LIMIT 20000)`);
     // token_holders is WITHOUT ROWID: delete by primary key

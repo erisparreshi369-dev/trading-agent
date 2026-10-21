@@ -53,7 +53,7 @@ const CollectorSchema = z
         max_per_minute: z.number().int().positive(),
       })
       .strict(),
-    retention: z.object({ raw_trades_days: z.number().positive(), holders_days: z.number().positive() }).strict(),
+    retention: z.object({ raw_trades_days: z.number().nonnegative(), holders_days: z.number().nonnegative() }).strict(), // 0 = keep forever
     heartbeat_s: z.number().positive(),
     stale_stream_s: z.number().positive(),
   })
@@ -96,6 +96,23 @@ const SignalsSchema = z
     exclude_bad_creators: z.boolean(),
     bad_creator_min_launches: z.number().int().positive(),
     bad_creator_max_success: z.number().min(0).max(1),
+    use_brain: z.boolean(), // skip what the learning brain predicts will lose, once it passed its exam (it can only skip, never add trades)
+  })
+  .strict();
+
+// The learning brain (learner/brain.py studies every night; the trader reads its newest model from the database).
+const BrainSchema = z
+  .object({
+    min_signals: z.number().int().positive(),
+    min_test_trades: z.number().int().positive(),
+    test_share: z.number().gt(0).lt(1),
+    min_gain: z.number().nonnegative(),
+    min_kept: z.number().int().positive(),
+    skip_below_roi: z.number().max(0.5),
+    ridge: z.number().positive(),
+    lesson_min_n: z.number().int().positive(),
+    lesson_min_diff: z.number().nonnegative(),
+    own_skips_min: z.number().int().positive(),
   })
   .strict();
 
@@ -201,7 +218,7 @@ const MadeOnSolSchema = z
 export const ConfigSchema = z
   .object({
     collector: CollectorSchema, scoring: ScoringSchema, signals: SignalsSchema, paper: PaperSchema, shadow: ShadowSchema, notifier: NotifierSchema,
-    providers: ProvidersSchema, madeonsol: MadeOnSolSchema,
+    providers: ProvidersSchema, madeonsol: MadeOnSolSchema, brain: BrainSchema,
   })
   .strict();
 
@@ -213,6 +230,7 @@ export type PaperConfig = z.infer<typeof PaperSchema>;
 export type ShadowConfig = z.infer<typeof ShadowSchema>;
 export type ShadowExitConfig = z.infer<typeof ExitSchema>;
 export type NotifierConfig = z.infer<typeof NotifierSchema>;
+export type BrainConfig = z.infer<typeof BrainSchema>;
 export type ProvidersConfig = z.infer<typeof ProvidersSchema>;
 export type MadeOnSolConfig = z.infer<typeof MadeOnSolSchema>;
 export type ProviderName = z.infer<typeof ProviderName>;

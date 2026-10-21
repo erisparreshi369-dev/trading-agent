@@ -1,7 +1,7 @@
 SHELL := /bin/bash
 PY := .venv/bin/python
 
-.PHONY: install build test migrate collector trader notifier dashboard intel score weekly status health logs kill unkill verify-live explain costs install-services uninstall-services restart deploy drill
+.PHONY: install build test migrate collector trader notifier dashboard app install-app brain youtube intel score weekly status health logs kill unkill verify-live explain costs install-services uninstall-services restart deploy drill
 
 install: ## install all dependencies
 	cd trader && npm ci
@@ -39,6 +39,12 @@ intel: build ## MadeOnSol daily job now: creator records, early-buyer scores, ca
 score: build ## re-score wallets and update the tracked set (systemd runs it daily at 00:15 UTC)
 	cd trader && node dist/scoring/index.js
 
+brain: ## learning brain: study every signal once now (the trading-brain service studies after every trade result)
+	$(PY) learner/brain.py
+
+youtube: ## the brain studies YouTube: top traders' rules vs our data (systemd runs it daily at 00:20 UTC)
+	$(PY) learner/youtube.py
+
 weekly: ## write this week's report into reports/ (systemd runs it Sundays 01:00 UTC; the notifier sends it)
 	$(PY) learner/weekly_report.py
 
@@ -46,15 +52,15 @@ weekly: ## write this week's report into reports/ (systemd runs it Sundays 01:00
 install-services: ## install + start the systemd user services and timers
 	bash scripts/install-services.sh
 
-restart: ## (re)start the collector, trader and notifier, including ones systemd gave up on
+restart: ## (re)start the collector, trader, notifier and learning brain, including ones systemd gave up on
 	systemctl --user reset-failed 'trading-*' 2>/dev/null || true
-	systemctl --user restart trading-collector trading-trader trading-notifier
-	@sleep 3 && systemctl --user is-active trading-collector trading-trader trading-notifier
+	systemctl --user restart trading-collector trading-trader trading-notifier trading-brain
+	@sleep 3 && systemctl --user is-active trading-collector trading-trader trading-notifier trading-brain
 
 uninstall-services:
 	bash scripts/install-services.sh --uninstall
 
-logs: ## make logs S=trader  (collector|trader|notifier|dashboard|score|weekly|intel)
+logs: ## make logs S=trader  (collector|trader|notifier|dashboard|score|weekly|intel|brain|youtube)
 	tail -n 200 -F logs/$(or $(S),trader).log | (cd trader && npx pino-pretty)
 
 health: ## one line, exit code 0/2: for scripts and cron
