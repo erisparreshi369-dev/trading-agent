@@ -403,6 +403,10 @@ class Snapshot:
             "max_entries": None if no_limits else L.get("MAX_ENTRIES_PER_DAY"),
             "killed": bool(rs and rs["kill_switch"]) or kill_file, "kill_reason": (rs["kill_reason"] if rs else None) or ("data/KILL file present" if kill_file else None),
             "kill_at": rs["kill_at"] if rs else None, "halted": bool(rs and rs["halted_day"] == utc_day(now)),
+            # size up after consistency (trader/src/risk/size-base.ts): trades are sized from this, not from today's balance
+            "size_base": rs["size_base"] if rs and "size_base" in rs.keys() else None,
+            "size_base_at": rs["size_base_at"] if rs and "size_base_at" in rs.keys() else None,
+            "size_trial": bool(rs and "size_base_prev" in rs.keys() and rs["size_base_prev"] is not None),
         }
         if money.get("started"):
             eq, start = money["equity"], money["start"]
@@ -514,7 +518,19 @@ class Snapshot:
         if brain and brain.get("model"):
             model = brain.pop("model")  # the learning brain's newest model (models/current.json was the pre-brain placeholder)
         return {"model": model, "report": report, "scoring": scoring, "scoring_at": scoring_hb["ts"] if scoring_hb else None, "brain": brain,
-                "youtube": self.youtube(), "veteran": self.veteran()}
+                "youtube": self.youtube(), "veteran": self.veteran(), "journal": self.journal()}
+
+    def journal(self) -> dict | None:
+        """Trade journal, all time: learner/journal.py (the weekly report has the same, per week)."""
+        if not self.has("paper_positions"):
+            return None
+        import sys
+        sys.path.insert(0, str(ROOT / "learner"))
+        import journal  # read-only queries, standard library only
+
+        ts = journal.trades(self.c, 0, 2**62)
+        return {"trades": len(ts), "clean": sum(not t["mistakes"] for t in ts), "mistakes": journal.tally(ts),
+                "last": [{"at": t["closed_at"], "pnl": t["pnl"], "text": journal.recap(t)} for t in ts[:5]], "min_n": journal.MIN_N}
 
     def veteran(self) -> dict | None:
         """Veteran habits (practice only) against our current rules, all time: learner/veteran.py, same numbers as the weekly report."""

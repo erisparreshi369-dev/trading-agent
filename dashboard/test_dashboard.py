@@ -311,11 +311,42 @@ class DashboardServer(unittest.TestCase):
             # the page shows the owner's values
             c = data.connect_ro(path)
             snap = data.Snapshot(c, path).build({})
-            self.assertEqual(snap["settings"]["risk.STOP_LOSS_PCT"], {"value": 0.15, "default": 0.25, "overridden": True, "min": 0.02, "max": 0.5})
+            stop = snap["settings"]["risk.STOP_LOSS_PCT"]
+            self.assertEqual({k: stop[k] for k in ("value", "default", "overridden", "min", "max")},
+                             {"value": 0.15, "default": 0.25, "overridden": True, "min": 0.02, "max": 0.5})
+            self.assertEqual((stop["trades_since"], stop["judge_after"]), (2, 30))  # the seed's 2 closed trades close after the change
+            self.assertNotIn("changed_at", snap["settings"]["madeonsol.warn_pct"])  # only settings that change how we trade
             self.assertEqual(snap["risk"]["limits"]["STOP_LOSS_PCT"], 0.15)
             self.assertFalse(snap["risk"]["paper_no_limits"])
             self.assertEqual(snap["risk"]["max_open"], 7)
             self.assertEqual(len(snap["settings_meta"]["settings"]), len(settings.SETTINGS))
+            # the trade journal and the proven balance trades are sized from
+            j = snap["learner"]["journal"]
+            self.assertEqual((j["trades"], len(j["last"])), (2, 2))
+            self.assertIn("size_base", snap["risk"])
+        finally:
+            tmp.cleanup()
+
+    def test_warns_when_a_trading_setting_changes_again_too_soon(self):
+        """One strategy: a change needs 30 closed trades before it can be judged. Changing it sooner is allowed, with a warning."""
+        tmp = tempfile.TemporaryDirectory()
+        path = Path(tmp.name) / "t.db"
+        seed(path)
+        try:
+            first = settings.apply(path, "signals.min_leader_buy_sol", 0.2)
+            self.assertNotIn("too_soon", first)  # never changed before
+            again = settings.apply(path, "signals.min_leader_buy_sol", 0.3)
+            self.assertEqual(again["too_soon"], {"trades_since": 2, "judge_after": 30})
+            self.assertEqual(again["value"], 0.3)  # saved anyway: the owner decides
+            c = sqlite3.connect(path)
+            for i in range(30):
+                c.execute("""INSERT INTO paper_positions (signal_id, mint, leader_wallet, status, size_sol, leader_price, entry_due_at, closed_at, pnl_sol)
+                             VALUES (1, ?, ?, 'closed', 0.02, 3e-8, ?, ?, 0)""", (MINT, W1, NOW - 1000, NOW - 1000 + i))
+            c.commit()
+            c.close()
+            self.assertNotIn("too_soon", settings.apply(path, "signals.min_leader_buy_sol", 0.25))
+            self.assertNotIn("too_soon", settings.apply(path, "madeonsol.warn_pct", 50))  # data limits aren't a trading plan
+            self.assertNotIn("too_soon", settings.apply(path, "madeonsol.warn_pct", 60))
         finally:
             tmp.cleanup()
 

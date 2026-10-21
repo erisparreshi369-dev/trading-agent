@@ -1,7 +1,7 @@
 SHELL := /bin/bash
 PY := .venv/bin/python
 
-.PHONY: install build test migrate collector trader notifier dashboard app install-app brain youtube veteran intel score weekly status health logs kill unkill verify-live explain costs install-services uninstall-services restart deploy drill
+.PHONY: install build test migrate collector trader notifier dashboard app install-app brain youtube veteran journal intel score weekly status health logs kill unkill verify-live explain costs install-services uninstall-services restart deploy drill
 
 install: ## install all dependencies
 	cd trader && npm ci
@@ -54,6 +54,9 @@ youtube: ## the brain studies YouTube: top traders' rules vs our data (systemd r
 
 veteran: ## veteran habits (practice only) vs our current rules: which ones would help
 	$(PY) learner/veteran.py
+
+journal: ## trade journal: each closed trade in words, and which mistakes cost the most
+	$(PY) learner/journal.py
 
 weekly: ## write this week's report into reports/ (systemd runs it Sundays 01:00 UTC; the notifier sends it)
 	$(PY) learner/weekly_report.py

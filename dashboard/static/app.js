@@ -277,8 +277,20 @@ function renderLimits(s) {
     row.querySelector(".save").disabled = !input.dataset.dirty;
     row.querySelector(".lim-normal").innerHTML = `${g("normal", "normal")}: ${esc(inWords(m, c.default))}`
       + (m.type === "bool" ? "" : ` <span class="lim-range">· ${g("allowed", "allowed")} ${esc(num(shown(m, c.min)))}–${esc(inWords(m, c.max))}</span>`)
-      + (m.help ? ` <span class="lim-help">· ${esc(m.help)}</span>` : "");
+      + (m.help ? ` <span class="lim-help">· ${esc(m.help)}</span>` : "")
+      + (c.changed_at ? ` <span class="lim-since${c.trades_since < c.judge_after ? " early" : ""}">· ${tested(c)}</span>` : "");
+    row.dataset.since = c.changed_at && c.trades_since < c.judge_after ? String(c.trades_since) : "";
+    row.dataset.judge = String(c.judge_after || "");
   }
+}
+
+/** Stick to one plan: how far the last change has been tested. */
+function tested(c) {
+  const when = ago(c.changed_at);
+  return c.trades_since < c.judge_after
+    ? g(`changed ${when}, ${c.trades_since} of ${c.judge_after} trades since: too early to judge`,
+      `changed ${when}, ${c.trades_since}/${c.judge_after} trades since: too early to tell`)
+    : g(`changed ${when}, ${c.trades_since} trades since: enough to judge`, `changed ${when}, ${c.trades_since} trades since: enough to tell`);
 }
 
 async function saveLimit(row, m, reset) {
@@ -296,8 +308,13 @@ async function saveLimit(row, m, reset) {
     }
   }
   const what = reset ? null : inWords(m, value);
-  if (!confirm(reset ? g(`Set "${label}" back to normal?`, `put "${label}" back to normal?`)
-    : g(`Change "${label}" to ${what}?${m.group === "safety" ? " Practice trades use it right away." : ""}`, `change "${label}" to ${what}? (you'll get a text)`))) return;
+  // one strategy: changing again before the last change was tested means never knowing which one worked
+  const early = row.dataset.since !== "" && row.dataset.since !== undefined
+    ? g(`\n\nYou changed this only ${row.dataset.since} trades ago. It takes ${row.dataset.judge} trades to know if a change helped. Change it again anyway?`,
+      `\n\nyou changed this only ${row.dataset.since} trades ago. it takes ${row.dataset.judge} trades to know if it helped. change it again anyway?`)
+    : "";
+  if (!confirm((reset ? g(`Set "${label}" back to normal?`, `put "${label}" back to normal?`)
+    : g(`Change "${label}" to ${what}?${m.group === "safety" ? " Practice trades use it right away." : ""}`, `change "${label}" to ${what}? (you'll get a text)`)) + early)) return;
   msg.textContent = g("Saving…", "saving…");
   try {
     const body = await postSetting(m.name, value);
@@ -557,7 +574,9 @@ function renderRisk(r) {
     ${meter(g("Entries today", "trades today"), r.entries_today, r.max_entries, int)}
     <dl class="kv"><dt>${g("position size", "trade size")}</dt><dd>${p0(L.MAX_POSITION_PCT)} ${g("of equity", "of the bag")}${r.paper_no_limits ? g(" (no cap in practice)", " (no cap in practice)") : `, max ${L.MAX_POSITION_SOL} SOL`}</dd>
       <dt>${g("stop loss", "auto-sell at")}</dt><dd>−${p0(L.STOP_LOSS_PCT)}</dd><dt>${g("time exit", "max hold")}</dt><dd>${dur(L.TIME_EXIT_MS / 1000)}</dd>
-      <dt>${g("reserve", "kept aside")}</dt><dd>${L.MIN_FREE_BALANCE_SOL} SOL ${g("kept free", "")}</dd></dl>
+      <dt>${g("reserve", "kept aside")}</dt><dd>${L.MIN_FREE_BALANCE_SOL} SOL ${g("kept free", "")}</dd>
+      ${r.size_base ? `<dt>${g("sized from", "sized from")}</dt><dd>${(+r.size_base).toFixed(3)} SOL ${g("proven balance", "proven bag")}${r.size_trial ? g(" (new step, on trial this week)", " (new step, on trial this week)") : ""}
+        <br><span class="muted">${g(`not today's balance: it goes up only after ${L.SIZE_STEP_WEEKS} winning weeks in a row`, `not today's bag: it only goes up after ${L.SIZE_STEP_WEEKS} green weeks in a row`)}</span></dd>` : ""}</dl>
     <div class="muted">${g(`Change these under Limits (never past the walls in trader/src/risk/limits.ts). Daily cap resets 00:00 UTC; the kill switch needs <span class="mono">make unkill</span>.`,
       `change these in Limits (never past the walls in limits.ts). daily limit resets 00:00 UTC; emergency stop needs <span class="mono">make unkill</span>.`)}</div>`;
 }
@@ -703,14 +722,14 @@ function renderYoutube(y) {
     return head + `<div class="empty">${g("No videos studied yet. It studies every night at 00:20 UTC", "no videos yet. studies every night at 00:20 UTC")} (${g("or", "or")} <span class="mono">make youtube</span>).</div>`;
   }
   const TAG = { agrees: g("our data agrees", "facts ✓"), disagrees: g("our data disagrees", "cap"), no_difference: g("no real difference", "no diff"),
-    not_enough_data: g("not enough data yet", "need more data"), untested: g("can't test yet", "can't test") };
+    not_enough_data: g("not enough data yet", "need more data"), untested: g("can't test yet", "can't test"), built_in: g("already does this", "already on it") };
   const line = (r) => {
     const d = r.data || {};
     const who = r.traders.length ? ` (${esc(r.traders.slice(0, 3).join(", "))}${r.traders.length > 3 ? "…" : ""})` : "";
     const tested = ["agrees", "disagrees", "no_difference"].includes(r.verdict) && isNum(d.diff);
     const why = tested ? ` · ${esc(r.test)}: ${(Math.abs(d.diff) * 100).toFixed(1)} ${g("points", "pts")} ${d.diff > 0 ? g("better", "better") : g("worse", "worse")} (${int(d.n)} ${g("trades", "trades")})`
       : r.verdict === "not_enough_data" && isNum(d.n) ? ` · ${int(d.n)} ${g("trades so far", "trades so far")}`
-      : r.verdict === "untested" ? ` · ${esc(r.test)}` : "";
+      : ["untested", "built_in"].includes(r.verdict) ? ` · ${esc(r.test)}` : "";
     return `<li title="${g("first heard", "first heard")} ${r.first_heard ? stamp(r.first_heard) : "–"} · ${int(r.mentions)} ${g("mentions", "mentions")}"><span class="mem-tag yt-${r.verdict}">${TAG[r.verdict] || esc(r.verdict)}</span>`
       + `<span>"${esc(r.words)}" <span class="muted">${g("in", "in")} ${int(r.videos)} ${g(`video${r.videos === 1 ? "" : "s"}`, `vid${r.videos === 1 ? "" : "s"}`)}${who}${why}</span></span></li>`;
   };
@@ -742,6 +761,21 @@ function renderVeteran(v) {
     + `<div class="muted">${g("Started", "started")} ${v.started_at ? agoSpan(v.started_at) : "–"} · ${g(`A verdict needs ${v.min_n} coins; "helps" only when the whole likely range is better.`, `verdict after ${v.min_n} coins. "W habit" only when it's better for sure-ish.`)}</div>`;
 }
 
+function renderJournal(j) {
+  if (!j) return "";
+  const head = `<h3>${g("Trade journal", "trade diary")} <span class="muted">${g("every trade written down: what went wrong, and what it cost", "every trade written down: what went wrong + what it cost")}</span></h3>`;
+  if (!j.trades) return head + `<div class="empty">${g("No closed trades yet.", "no closed trades yet.")}</div>`;
+  const TAG = { costly: g("costly", "costly"), "not costly": g("not costly", "fine"), "too early": g("too early", "too early") };
+  const cls = { costly: "vet-hurts", "not costly": "vet-helps", "too early": "vet-too_early" };
+  const line = (m) => `<li title="${g("avg return", "avg return")} ${pct(m.avg_roi)} ${g("vs", "vs")} ${pct(m.rest_avg_roi)} ${g("for the other trades", "for the rest")}">`
+    + `<span class="mem-tag ${cls[m.verdict] || ""}">${TAG[m.verdict] || esc(m.verdict)}</span>`
+    + `<span>${esc(m.words)} <span class="muted">· ${int(m.n)} ${g("trades", "trades")}, ${sol(m.pnl)} SOL${m.verdict === "too early" ? ` · ${int(m.n)}/${int(j.min_n)}` : ""}</span></span></li>`;
+  return head + `<div class="muted">${int(j.trades)} ${g("trades", "trades")}, ${int(j.clean)} ${g("without a mistake", "clean")}</div>`
+    + (j.mistakes.length ? `<ul class="lessons">${j.mistakes.map(line).join("")}</ul>` : "")
+    + `<details class="report-box"><summary>${g("Last trades", "last trades")}</summary><ul class="journal">${j.last.map((t) => `<li><span class="muted">${stamp(t.at)}</span> ${esc(t.text)}</li>`).join("")}</ul></details>`
+    + `<div class="muted">${g(`"costly" after ${j.min_n} trades, when they did 2+ points worse than the rest. Details: make journal.`, `"costly" after ${j.min_n} trades if they did 2+ pts worse. more: make journal.`)}</div>`;
+}
+
 function renderLearner(L) {
   const [left, right] = renderBrain(L.brain).split("<!--split-->");
   let h = "";
@@ -764,7 +798,7 @@ function renderLearner(L) {
   } else {
     h += `<div class="empty">${g("No weekly report yet", "no weekly recap yet")} (${g("Sundays", "Sundays")} 01:00 UTC, ${g("or", "or")} <span class="mono">make weekly</span>).</div>`;
   }
-  $("learner").innerHTML = `<div class="brain-grid"><div>${left}${h}</div><div>${right ?? ""}${renderVeteran(L.veteran)}${renderYoutube(L.youtube)}</div></div>`;
+  $("learner").innerHTML = `<div class="brain-grid"><div>${left}${h}</div><div>${right ?? ""}${renderVeteran(L.veteran)}${renderJournal(L.journal)}${renderYoutube(L.youtube)}</div></div>`;
 }
 
 // Small markdown subset (what learner/weekly_report.py writes): headings, lists, tables, emphasis, code.

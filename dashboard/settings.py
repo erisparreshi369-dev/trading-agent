@@ -22,6 +22,10 @@ REGISTRY = json.loads((ROOT / "shared/editable-settings.json").read_text())
 PREFIX = "override."
 SETTINGS = {s["key"][len(PREFIX):]: s for s in REGISTRY["settings"]}
 BY_PATH = {s["path"]: name for name, s in SETTINGS.items()}
+# Stick to one plan: a change to how the bot trades needs this many closed trades before anyone can
+# tell whether it helped (the notifier's TRADES_TO_JUDGE). Changing it again sooner is allowed, with a warning.
+JUDGE_AFTER = 30
+TRADING_GROUPS = ("safety", "filters")
 
 
 # ---------------------------------------------------------------- normal values (what applies without a change)
@@ -145,15 +149,43 @@ def current(c: sqlite3.Connection, name: str, stored: dict[str, str] | None = No
     return out
 
 
+def last_changes(c: sqlite3.Connection) -> dict[str, int]:
+    """When each setting was last changed on the dashboard (ms), from the setting_changed alerts it writes."""
+    out: dict[str, int] = {}
+    try:
+        rows = c.execute("SELECT ts, data FROM alerts WHERE kind = 'setting_changed' AND source = 'dashboard' ORDER BY ts, id").fetchall()
+    except sqlite3.OperationalError:
+        return out
+    for ts, raw in rows:
+        try:
+            name = json.loads(raw or "{}").get("setting")
+        except ValueError:
+            continue
+        if name in SETTINGS:
+            out[name] = ts
+    return out
+
+
+def trades_since(c: sqlite3.Connection, ts: int) -> int:
+    """Closed practice trades since `ts`: what a change made then has been tested on."""
+    try:
+        return c.execute("SELECT count(*) FROM paper_positions WHERE status = 'closed' AND closed_at > ?", (ts,)).fetchone()[0]
+    except sqlite3.OperationalError:
+        return 0
+
+
 def all_current(c: sqlite3.Connection) -> dict[str, dict]:
-    """Every setting, for the page (one database read)."""
+    """Every setting, for the page (one database read), with when a trading setting was last changed and the trades since."""
     stored = _all_stored(c)
+    changes = last_changes(c)
     out = {}
     for name in SETTINGS:
         try:
             out[name] = current(c, name, stored)
         except ValueError:  # its normal value can't be found: don't offer it
             continue
+        if name in changes and SETTINGS[name]["group"] in TRADING_GROUPS:
+            out[name] |= {"changed_at": changes[name], "trades_since": trades_since(c, changes[name]), "judge_after": JUDGE_AFTER}
     return out
 
 
@@ -209,6 +241,8 @@ def apply(db: Path, name: str, value, guard_mb: float | None = None, limit: int 
         c.execute("BEGIN IMMEDIATE")
         _check_rules(c, name, value)
         before = current(c, name)
+        last = last_changes(c).get(name) if s["group"] in TRADING_GROUPS else None
+        since = trades_since(c, last) if last is not None else None
         if value is None:
             c.execute("DELETE FROM kv WHERE key = ?", (s["key"],))
             to = before["default"]
@@ -224,7 +258,10 @@ def apply(db: Path, name: str, value, guard_mb: float | None = None, limit: int 
             c.execute("INSERT INTO alerts (ts, level, kind, source, text, data) VALUES (?, 'info', 'setting_changed', 'dashboard', ?, ?)",
                       (int(time.time() * 1000), f"{name}: {frm_t} -> {to_t}" + (" (back to normal)" if value is None else ""), json.dumps(data)))
         c.execute("COMMIT")
-        return {"setting": name, **current(c, name), "text": fmt(name, current(c, name)["value"]), "changed": changed}
+        out = {"setting": name, **current(c, name), "text": fmt(name, current(c, name)["value"]), "changed": changed}
+        if changed and since is not None and since < JUDGE_AFTER:
+            out["too_soon"] = {"trades_since": since, "judge_after": JUDGE_AFTER}  # saved anyway: the owner decides
+        return out
     except Exception:
         if c.in_transaction:
             c.execute("ROLLBACK")

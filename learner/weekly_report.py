@@ -25,6 +25,7 @@ sys.path.insert(0, str(ROOT / "learner"))
 import experiments as ex  # noqa: E402
 import creator_section  # noqa: E402
 import slippage_section  # noqa: E402
+import journal  # noqa: E402
 import veteran  # noqa: E402
 
 
@@ -221,6 +222,7 @@ def build(c: sqlite3.Connection, now_ms: int, days: int) -> str:
     md += slippage_section.section(c, since, now_ms, table, sol, pct)
     md += creator_section.section(c, since, now_ms, table, sol, pct)
     md += veteran.section(c, since, now_ms, table, sol, pct)
+    md += journal.section(c, since, now_ms, table, sol, pct)
 
     # ---- wallets ----
     tracked = c.execute("SELECT count(*) FROM tracked_wallets WHERE active = 1").fetchone()[0]
