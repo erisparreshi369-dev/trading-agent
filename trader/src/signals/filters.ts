@@ -2,12 +2,33 @@ import type { SignalsConfig } from "../lib/config.js";
 
 export type Features = Record<string, number | string | boolean | null>;
 
+/** One closed trade of the book deciding (our paper trades, or a shadow variant's own), newest first. */
+export interface RecentResult {
+  won: boolean;
+  closedAt: number;
+}
+
+/** How fast the curve filled since launch, SOL per minute: a coin that went vertical. Null when unknown. */
+export function curveSolPerMin(f: Features): number | null {
+  const age = f.token_age_s;
+  if (f.venue !== "curve" || typeof age !== "number" || age <= 0 || typeof f.liquidity_sol !== "number") return null;
+  return f.liquidity_sol / (age / 60);
+}
+
+/** Cool off: the last `pause_after_losses` trades all lost and the newest closed less than `pause_minutes` ago. */
+export function coolingOff(recent: RecentResult[], c: SignalsConfig, at: number): boolean {
+  const n = c.pause_after_losses;
+  if (n <= 0 || recent.length < n) return false;
+  const last = recent.slice(0, n);
+  return last.every((r) => !r.won) && at - last[0]!.closedAt < c.pause_minutes * 60_000;
+}
+
 /**
  * The signal filters as a pure function of the feature snapshot stored with every signal, so the
  * live engine and every shadow variant decide from identical inputs, and the decision can be
  * recomputed later for any other settings. Reason texts are what reports group on: keep them stable.
  */
-export function cheapReasons(f: Features, c: SignalsConfig, inCooldown: boolean): string[] {
+export function cheapReasons(f: Features, c: SignalsConfig, inCooldown: boolean, recent: RecentResult[] = [], at = 0): string[] {
   const reasons: string[] = [];
   if (!c.venues.includes(f.venue as "curve" | "amm")) reasons.push(`venue ${f.venue} not enabled`);
   const buy = f.leader_buy_sol as number;
@@ -25,6 +46,11 @@ export function cheapReasons(f: Features, c: SignalsConfig, inCooldown: boolean)
   if (f.venue === "curve" && (liq < c.min_real_sol || liq > c.max_real_sol)) reasons.push(`curve SOL ${liq.toFixed(2)} outside [${c.min_real_sol}, ${c.max_real_sol}]`);
   if ((f.confirmations as number) < c.min_confirmations) reasons.push(`${f.confirmations} tracked buyers < ${c.min_confirmations}`);
   if (inCooldown) reasons.push("re-entry cooldown");
+  const speed = curveSolPerMin(f);
+  if (c.max_curve_sol_per_min !== null && speed !== null && speed > c.max_curve_sol_per_min) {
+    reasons.push(`chasing: curve filled ${speed.toFixed(1)} SOL/min > ${c.max_curve_sol_per_min}`);
+  }
+  if (coolingOff(recent, c, at)) reasons.push(`cooling off after ${c.pause_after_losses} loss${c.pause_after_losses === 1 ? "" : "es"} in a row`);
   // creator record stored before the decision (daily MadeOnSol job); unknown creators pass
   const launches = f.creator_launches;
   if (c.exclude_bad_creators && typeof launches === "number" && launches >= c.bad_creator_min_launches
@@ -49,8 +75,8 @@ export function onChainReasons(f: Features, c: SignalsConfig): string[] {
 }
 
 /** Every reason to reject, in the order the engine checks them (on-chain only if the cheap checks pass). */
-export function rejectReasons(f: Features, c: SignalsConfig, inCooldown: boolean): string[] {
-  const reasons = cheapReasons(f, c, inCooldown);
+export function rejectReasons(f: Features, c: SignalsConfig, inCooldown: boolean, recent: RecentResult[] = [], at = 0): string[] {
+  const reasons = cheapReasons(f, c, inCooldown, recent, at);
   if (reasons.length) return reasons;
   reasons.push(...onChainReasons(f, c));
   if (reasons.length === 0 && (f.score as number) < c.min_score) reasons.push(`score ${(f.score as number).toFixed(3)} < ${c.min_score}`);

@@ -102,6 +102,11 @@ signals:
   # The learning brain: once its newest model passed the exam (brain: below), skip signals it
   # predicts will lose. It can only make the bot pickier. Its exam and its own-skips record judge it.
   use_brain: true
+  # Veteran habits: what a trader with 10 years behind them does. Off here until the vet_* practice
+  # variants below show they help (weekly report, "Veteran habits"); null / 0 = off.
+  max_curve_sol_per_min: null   # don't chase: skip a coin whose curve filled faster than this (SOL per minute since launch)
+  pause_after_losses: 0         # cool off: after this many losses in a row...
+  pause_minutes: 30             # ...no new trades for this long after the last loss
 
 paper:
   start_balance_sol: 1.0
@@ -123,7 +128,8 @@ shadow:
   # Results are settled from the recorded tape once the outcome is known (at most ~32 min later).
   # A variant is the live settings plus its overrides:
   #   filters: any `signals:` key, or `none` (take every signal, rejected ones included)
-  #   exit:    leader_exit, take_profit_pct, trailing_stop_pct (from the peak), max_hold_s (<= 1800)
+  #   exit:    leader_exit, take_profit_pct, trailing_stop_pct (from the peak), max_hold_s (<= 1800),
+  #            stop_loss_pct (<= the hard 25%), breakeven_after_pct, cut_if_flat_s
   #   size_sol
   #   max_slippage_bps (instead of paper.max_slippage_bps)
   # Loosening a filter means more signals get the on-chain checks (2 RPC credits each).
@@ -148,6 +154,14 @@ shadow:
     size_0.25: { size_sol: 0.25 }
     no_slip_limit: { max_slippage_bps: 100000 }          # what the trades skipped for slippage would have done (weekly report)
     creator_check: { filters: { exclude_bad_creators: true } }   # live settings + skip coins from bad creators (weekly report)
+    # veteran habits, one at a time and all together (weekly report "Veteran habits" compares each with live)
+    vet_no_chase: { filters: { max_curve_sol_per_min: 30 } }           # skip coins that went vertical (curve filled > 30 SOL/min)
+    vet_cool_off: { filters: { pause_after_losses: 3, pause_minutes: 30 } }  # 3 losses in a row: sit out 30 min
+    vet_stop_15: { exit: { stop_loss_pct: 15 } }                       # cut losers sooner: stop at -15% instead of -25%
+    vet_breakeven: { exit: { breakeven_after_pct: 25 } }               # up 25%: never let it turn into a loss
+    vet_cut_flat: { exit: { cut_if_flat_s: 120 } }                     # not above entry after 2 min: it isn't working, get out
+    veteran: { filters: { max_curve_sol_per_min: 30, pause_after_losses: 3, pause_minutes: 30 },
+               exit: { stop_loss_pct: 15, breakeven_after_pct: 25, cut_if_flat_s: 120 } }
 
 notifier:
   watch_services: [collector, trader, brain]  # alert if one of these stops reporting

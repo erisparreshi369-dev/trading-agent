@@ -4,7 +4,7 @@ import { log } from "../lib/log.js";
 import { Brain } from "../brain/model.js";
 import { bondingCurve, canonicalPool } from "../collector/pools.js";
 import type { PaperEngine, TradeRow } from "../paper/engine.js";
-import { cheapReasons, rejectReasons, type Features } from "./filters.js";
+import { cheapReasons, rejectReasons, type Features, type RecentResult } from "./filters.js";
 import { TOKEN_2022, type TokenInfoSource } from "./token-info.js";
 
 export type { Features };
@@ -116,10 +116,16 @@ export class SignalEngine {
       WHERE t.mint = ? AND t.is_buy = 1 AND t.received_at BETWEEN ? AND ?`).get(t.mint, since, t.received_at) as { n: number }).n;
     const lastExit = this.db.prepare("SELECT max(COALESCE(closed_at, entry_due_at)) ts FROM paper_positions WHERE mint = ?").get(t.mint) as { ts: number | null };
     const inCooldown = !!lastExit.ts && t.received_at - lastExit.ts < c.reentry_cooldown_s * 1000;
+    // our own latest results, for the cool-off after a losing streak (only read when that rule is on)
+    const recent = c.pause_after_losses > 0
+      ? (this.db.prepare(`SELECT pnl_sol > 0 won, closed_at closedAt FROM paper_positions WHERE status = 'closed' AND closed_at <= ?
+          ORDER BY closed_at DESC, id DESC LIMIT ?`).all(t.received_at, c.pause_after_losses) as { won: number; closedAt: number }[])
+        .map((r) => ({ won: !!r.won, closedAt: r.closedAt }))
+      : [] as RecentResult[];
 
     // ---- on-chain checks, only when the cheap ones pass for us or a shadow variant (saves RPC credits) ----
     f.onchain_checked = false;
-    if (tok && (cheapReasons(f, c, inCooldown).length === 0 || this.observer?.wantsOnChain(f, t.mint, t.received_at))) {
+    if (tok && (cheapReasons(f, c, inCooldown, recent, t.received_at).length === 0 || this.observer?.wantsOnChain(f, t.mint, t.received_at))) {
       try {
         const program = tok.token_program ?? TOKEN_2022;
         const owner = t.venue === "amm" ? canonicalPool(t.mint) : bondingCurve(t.mint);
@@ -144,7 +150,7 @@ export class SignalEngine {
     } catch (err) {
       log.warn({ err: String(err) }, "learning brain failed to predict; deciding without it");
     }
-    const reasons = rejectReasons(f, c, inCooldown);
+    const reasons = rejectReasons(f, c, inCooldown, recent, t.received_at);
     let decision: SignalResult["decision"] = reasons.length ? "reject" : "enter";
     const signalId = Number(this.db.prepare(`INSERT INTO signals (ts, wallet, mint, leader_trade_id, venue, score, decision, reasons, features)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(this.now(), t.wallet, t.mint, t.id, t.venue, score, decision, JSON.stringify(reasons), JSON.stringify(f)).lastInsertRowid);

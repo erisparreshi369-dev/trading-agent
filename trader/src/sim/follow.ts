@@ -18,6 +18,10 @@ export interface ExitRule {
   takeProfitPct: number | null; // above our entry price
   trailingStopPct: number | null; // below the highest price since entry
   maxHoldMs: number;
+  /** Once the price is this far above our entry, the stop moves up to our entry price ("breakeven_stop"). */
+  breakevenAfterPct?: number | null;
+  /** This long after our entry, if the price isn't above our entry price, get out ("not_working"). */
+  cutIfFlatMs?: number | null;
 }
 
 export interface FollowParams {
@@ -81,12 +85,25 @@ export function simulateFollow(tape: FollowTrade[], p: FollowParams): FollowResu
   const x = p.exit;
   let trigger = entryAt + x.maxHoldMs;
   let why = "time_exit";
-  const stop = buy.price * (1 - x.stopLossPct);
+  let stop = buy.price * (1 - x.stopLossPct);
   const tp = x.takeProfitPct === null ? Infinity : buy.price * (1 + x.takeProfitPct);
+  const breakevenAt = x.breakevenAfterPct ? buy.price * (1 + x.breakevenAfterPct) : Infinity;
+  let atBreakeven = false;
+  let flatAt = x.cutIfFlatMs ? entryAt + x.cutIfFlatMs : null;
+  let last = entry.price;
   let peak = entry.price;
   for (const t of tape) {
     if (t.received_at < p.leaderAt) continue;
     if (t.received_at >= trigger) break;
+    // the first trade past the check time: judge the price as it stood then
+    if (flatAt !== null && t.received_at >= flatAt) {
+      if (last <= buy.price) {
+        trigger = flatAt;
+        why = "not_working";
+        break;
+      }
+      flatAt = null;
+    }
     // the leader selling while our buy is in flight takes us straight out once it lands
     if (x.leaderExit && t.wallet === p.leaderWallet && !t.is_buy && t.received_at > p.leaderAt) {
       trigger = Math.max(t.received_at, entryAt);
@@ -95,9 +112,10 @@ export function simulateFollow(tape: FollowTrade[], p: FollowParams): FollowResu
     }
     if (t.received_at <= entryAt || t.price_sol === null) continue;
     const px = t.price_sol;
+    last = px;
     if (px <= stop) {
       trigger = t.received_at;
-      why = "stop_loss";
+      why = atBreakeven ? "breakeven_stop" : "stop_loss";
       break;
     }
     if (px >= tp) {
@@ -105,12 +123,21 @@ export function simulateFollow(tape: FollowTrade[], p: FollowParams): FollowResu
       why = "take_profit";
       break;
     }
+    if (!atBreakeven && px >= breakevenAt) {
+      atBreakeven = true;
+      stop = Math.max(stop, buy.price);
+    }
     peak = Math.max(peak, px);
     if (x.trailingStopPct !== null && px <= peak * (1 - x.trailingStopPct)) {
       trigger = t.received_at;
       why = "trailing_stop";
       break;
     }
+  }
+  // a quiet token: no trade after the check time, so the last price stands
+  if (flatAt !== null && flatAt < trigger && last <= buy.price) {
+    trigger = flatAt;
+    why = "not_working";
   }
   const exitAt = trigger + p.delayMs;
   if (exitAt > p.dataUntil) return { status: "unknown" };

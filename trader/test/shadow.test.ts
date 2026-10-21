@@ -124,6 +124,67 @@ describe("shadow variants", () => {
     }
   });
 
+  it("veteran exits: break-even stop, cut a trade that isn't working, a tighter stop", async () => {
+    const s = setup({
+      be: { exit: { leader_exit: false, breakeven_after_pct: 25 } },
+      flat: { exit: { leader_exit: false, cut_if_flat_s: 60 } },
+      flat_early: { exit: { leader_exit: false, cut_if_flat_s: 20 } },
+      stop_15: { exit: { leader_exit: false, stop_loss_pct: 15 } },
+      ride: { exit: { leader_exit: false } },
+    });
+    try {
+      await scenario(s, (at, t0) => {
+        at(10_000, () => s.curve.movePrice(1.3, t0 + 10_000)); // +30%: break-even armed; still up at the 20s check
+        at(30_000, () => s.curve.movePrice(0.7, t0 + 30_000)); // ~-9% from entry: break-even stop; still down at the 60s check
+        at(120_000, () => s.curve.movePrice(0.85, t0 + 120_000)); // ~-23%: the -15% stop
+        at(200_000, () => s.curve.movePrice(0.85, t0 + 200_000)); // ~-34%: the hard -25% stop
+      });
+      expect(s.shadow("be")).toMatchObject({ status: "closed", exit_reason: "breakeven_stop" });
+      expect(s.shadow("be").exit_at).toBe(s.shadow("be").signal_at + 30_000 + s.delay);
+      expect(s.shadow("flat")).toMatchObject({ status: "closed", exit_reason: "not_working" });
+      expect(s.shadow("flat").exit_at - s.shadow("flat").entry_at).toBe(60_000 + s.delay);
+      expect(s.shadow("flat_early")).toMatchObject({ status: "closed", exit_reason: "stop_loss" }); // it was working at 20s
+      expect(s.shadow("stop_15")).toMatchObject({ status: "closed", exit_reason: "stop_loss" });
+      expect(s.shadow("stop_15").exit_at).toBe(s.shadow("stop_15").signal_at + 120_000 + s.delay);
+      expect(s.shadow("ride").exit_at).toBe(s.shadow("ride").signal_at + 200_000 + s.delay);
+    } finally {
+      await s.trader.stop();
+    }
+  });
+
+  it("a quiet coin that never moves is cut at the check time", async () => {
+    const s = setup({ flat: { exit: { leader_exit: false, cut_if_flat_s: 60 } } });
+    try {
+      await scenario(s, () => {});
+      expect(s.shadow("flat")).toMatchObject({ status: "closed", exit_reason: "not_working" });
+      expect(s.shadow("flat").exit_at - s.shadow("flat").entry_at).toBe(60_000 + s.delay);
+    } finally {
+      await s.trader.stop();
+    }
+  });
+
+  it("veteran filters: skip a coin that went vertical; each variant cools off after its own losing streak", async () => {
+    const s = setup({
+      live: {}, slow: { filters: { max_curve_sol_per_min: 1000 } }, fast: { filters: { max_curve_sol_per_min: 1 } },
+      cool: { filters: { pause_after_losses: 1, pause_minutes: 60 } },
+    });
+    try {
+      await scenario(s, () => {}); // a flat coin: the costs make it a small loss
+      expect(s.shadow("slow")).toMatchObject({ status: "closed" });
+      expect(s.shadow("fast")).toMatchObject({ status: "filtered" });
+      expect(JSON.parse(s.shadow("fast").reasons)[0]).toMatch(/^chasing: curve filled [\d.]+ SOL\/min > 1$/);
+      expect(s.shadow("cool").pnl_sol).toBeLessThan(0);
+      // the next coin, minutes after that loss
+      s.curve = new Curve(s.db, key(), key(), s.c.t - 60_000).insertToken({ initial_buy_tokens: 30_000_000_000_000 });
+      s.curve.movePrice(4, s.c.t - 30_000);
+      await scenario(s, () => {});
+      expect(s.shadow("live")).toMatchObject({ status: "closed" });
+      expect(s.shadow("cool")).toMatchObject({ status: "filtered", reasons: JSON.stringify(["cooling off after 1 loss in a row"]) });
+    } finally {
+      await s.trader.stop();
+    }
+  });
+
   it("filter variants: 'none' takes rejected signals, a looser one pays for its on-chain checks", async () => {
     const s = setup({ live: {}, all_signals: { filters: "none" }, "buy_0.05": { filters: { min_leader_buy_sol: 0.05 } } });
     try {
@@ -247,7 +308,12 @@ describe("shadow config", () => {
     const vs = resolveVariants(cfg);
     const live = vs.find((v) => v.name === "live")!;
     expect(live.filters).toEqual(cfg.signals);
-    expect(live.exit).toEqual({ leaderExit: true, stopLossPct: RISK.STOP_LOSS_PCT, takeProfitPct: null, trailingStopPct: null, maxHoldMs: RISK.TIME_EXIT_MS });
+    expect(live.exit).toEqual({
+      leaderExit: true, stopLossPct: RISK.STOP_LOSS_PCT, takeProfitPct: null, trailingStopPct: null, maxHoldMs: RISK.TIME_EXIT_MS, breakevenAfterPct: null, cutIfFlatMs: null,
+    });
+    expect(vs.find((v) => v.name === "veteran")!.exit).toMatchObject({ stopLossPct: 0.15, breakevenAfterPct: 0.25, cutIfFlatMs: 120_000 });
+    // a variant's stop can be tighter than the hard one, never looser
+    expect(ConfigSchema.safeParse({ ...cfg, shadow: { ...cfg.shadow, variants: { x: { exit: { stop_loss_pct: 40 } } } } }).success).toBe(false);
     expect(vs.find((v) => v.name === "all_signals")!.filters).toBeNull();
     expect(vs.find((v) => v.name === "tp_50")!.exit.takeProfitPct).toBe(0.5);
     expect(vs.find((v) => v.name === "size_0.1")!.sizeSol).toBe(0.1);

@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import type { SignalsConfig } from "../src/lib/config.js";
 import { INGEST_MARGIN_MS } from "../src/paper/engine.js";
 import { SignalEngine, type LeaderTrade } from "../src/signals/engine.js";
+import { coolingOff, curveSolPerMin } from "../src/signals/filters.js";
 import type { TokenInfoSource } from "../src/signals/token-info.js";
 import { Trader } from "../src/trader/trader.js";
 import { clock, Curve, key, memDb, testConfig } from "./helpers.js";
@@ -44,6 +45,16 @@ function leaderBuy(s: ReturnType<typeof setup>, sol = 0.5, wallet = s.leader): L
   return s.db.prepare("SELECT * FROM trades WHERE id = ?").get(id) as LeaderTrade;
 }
 
+/** `n` closed losing paper trades, the newest closed at `at`. */
+function lostTrades(s: ReturnType<typeof setup>, n: number, at: number, pnl = -0.005): void {
+  const sig = Number(s.db.prepare(`INSERT INTO signals (ts, wallet, mint, leader_trade_id, venue, score, decision, reasons, features)
+    VALUES (?, ?, ?, (SELECT min(id) FROM trades), 'curve', 0, 'enter', '[]', '{}')`).run(at, s.leader, s.curve.mint).lastInsertRowid);
+  for (let i = 0; i < n; i++) {
+    s.db.prepare(`INSERT INTO paper_positions (signal_id, mint, leader_wallet, status, size_sol, leader_price, entry_due_at, closed_at, pnl_sol)
+      VALUES (?, ?, ?, 'closed', 0.02, 1, ?, ?, ?)`).run(sig, key(), s.leader, at - 120_000, at - i * 1000, pnl);
+  }
+}
+
 describe("SignalEngine filters", () => {
   it("accepts a clean signal, records features, and schedules a paper entry", async () => {
     const s = setup();
@@ -71,6 +82,7 @@ describe("SignalEngine filters", () => {
       s.db.prepare("DELETE FROM tokens").run();
       return leaderBuy(s);
     }, /launch not seen/],
+    ["chasing a coin that went vertical", { max_curve_sol_per_min: 1 }, (s: ReturnType<typeof setup>) => leaderBuy(s), /chasing: curve filled [\d.]+ SOL\/min > 1/],
   ])("rejects: %s, without spending RPC credits", async (_n, over, make, reason) => {
     const s = setup(over);
     const r = await s.signals.evaluate(make(s));
@@ -170,3 +182,34 @@ describe("Trader end to end", () => {
 });
 
 const cfgDelay = (s: ReturnType<typeof setup>) => s.cfg.paper.execution_delay_ms;
+
+describe("veteran habits (filters)", () => {
+  const c = { pause_after_losses: 3, pause_minutes: 30 } as SignalsConfig;
+  const at = 10_000_000;
+  const lost = (minsAgo: number) => ({ won: false, closedAt: at - minsAgo * 60_000 });
+
+  it("cools off only after N losses in a row, and only for pause_minutes after the last one", () => {
+    expect(coolingOff([lost(1), lost(2), lost(3)], c, at)).toBe(true);
+    expect(coolingOff([lost(31), lost(32), lost(33)], c, at)).toBe(false); // the pause is over
+    expect(coolingOff([lost(1), { won: true, closedAt: at - 120_000 }, lost(3)], c, at)).toBe(false); // a win breaks the streak
+    expect(coolingOff([lost(1), lost(2)], c, at)).toBe(false); // too few trades yet
+    expect(coolingOff([lost(1), lost(2), lost(3)], { ...c, pause_after_losses: 0 }, at)).toBe(false); // off
+  });
+
+  it("curve fill speed: SOL in the curve per minute since launch, curve only", () => {
+    expect(curveSolPerMin({ venue: "curve", liquidity_sol: 30, token_age_s: 60 })).toBe(30);
+    expect(curveSolPerMin({ venue: "amm", liquidity_sol: 30, token_age_s: 60 })).toBeNull();
+    expect(curveSolPerMin({ venue: "curve", liquidity_sol: 30 })).toBeNull(); // launch not seen
+  });
+
+  it("sits out after our own losing streak, without spending RPC credits; an old streak lets it trade again", async () => {
+    const s = setup({ pause_after_losses: 2, pause_minutes: 30 });
+    lostTrades(s, 2, s.c.t - 60_000);
+    const r = await s.signals.evaluate(leaderBuy(s));
+    expect(r).toMatchObject({ decision: "reject", reasons: ["cooling off after 2 losses in a row"] });
+    expect(s.info.calls).toBe(0);
+    const later = setup({ pause_after_losses: 2, pause_minutes: 30 });
+    lostTrades(later, 2, later.c.t - 31 * 60_000);
+    expect((await later.signals.evaluate(leaderBuy(later))).decision).toBe("enter");
+  });
+});

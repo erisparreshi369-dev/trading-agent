@@ -2,7 +2,7 @@ import type { Config, SignalsConfig } from "../lib/config.js";
 import type { DB } from "../lib/db.js";
 import { log } from "../lib/log.js";
 import { RISK } from "../risk/limits.js";
-import { cheapReasons, rejectReasons, type Features } from "../signals/filters.js";
+import { cheapReasons, rejectReasons, type Features, type RecentResult } from "../signals/filters.js";
 import { simulateFollow, stateAt, type ExitRule, type FollowTrade } from "../sim/follow.js";
 import type { CostModel } from "../sim/market.js";
 
@@ -42,6 +42,7 @@ const OUTCOME_HORIZON_MS = 30 * 60_000;
 export function resolveVariants(cfg: Config): Variant[] {
   const base: ExitRule = {
     leaderExit: cfg.paper.follow_leader_exit, stopLossPct: RISK.STOP_LOSS_PCT, takeProfitPct: null, trailingStopPct: null, maxHoldMs: RISK.TIME_EXIT_MS,
+    breakevenAfterPct: null, cutIfFlatMs: null,
   };
   return Object.entries(cfg.shadow.variants).map(([name, v]) => {
     const x = v.exit ?? {};
@@ -54,6 +55,9 @@ export function resolveVariants(cfg: Config): Variant[] {
         ...(x.take_profit_pct !== undefined && { takeProfitPct: x.take_profit_pct === null ? null : x.take_profit_pct / 100 }),
         ...(x.trailing_stop_pct !== undefined && { trailingStopPct: x.trailing_stop_pct === null ? null : x.trailing_stop_pct / 100 }),
         ...(x.max_hold_s !== undefined && { maxHoldMs: Math.min(x.max_hold_s * 1000, RISK.TIME_EXIT_MS) }),
+        ...(x.stop_loss_pct !== undefined && { stopLossPct: Math.min(x.stop_loss_pct / 100, RISK.STOP_LOSS_PCT) }),
+        ...(x.breakeven_after_pct !== undefined && { breakevenAfterPct: x.breakeven_after_pct === null ? null : x.breakeven_after_pct / 100 }),
+        ...(x.cut_if_flat_s !== undefined && { cutIfFlatMs: x.cut_if_flat_s === null ? null : x.cut_if_flat_s * 1000 }),
       },
       sizeSol: v.size_sol ?? cfg.shadow.size_sol,
       maxSlippageBps: v.max_slippage_bps ?? cfg.paper.max_slippage_bps,
@@ -95,7 +99,7 @@ export class ShadowBook {
   }
 
   wantsOnChain(f: Features, mint: string, at: number): boolean {
-    return this.variants.some((v) => v.filters && cheapReasons(f, v.filters, this.inCooldown(v, mint, at)).length === 0);
+    return this.variants.some((v) => v.filters && cheapReasons(f, v.filters, this.inCooldown(v, mint, at), this.recent(v, at), at).length === 0);
   }
 
   /** Decide every variant for this signal now (later signals' cooldowns depend on it); settle later. */
@@ -105,7 +109,7 @@ export class ShadowBook {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`);
     this.db.transaction(() => {
       for (const v of this.variants) {
-        const reasons = v.filters ? rejectReasons(f, v.filters, this.inCooldown(v, t.mint, t.received_at)) : [];
+        const reasons = v.filters ? rejectReasons(f, v.filters, this.inCooldown(v, t.mint, t.received_at), this.recent(v, t.received_at), t.received_at) : [];
         ins.run(signalId, v.name, t.mint, t.wallet, t.received_at, reasons.length ? "filtered" : "pending", reasons.length ? JSON.stringify(reasons) : null, v.sizeSol);
       }
     }).immediate(); // read-then-write: take the write lock up front, or a concurrent writer makes SQLite fail fast with SQLITE_BUSY
@@ -117,6 +121,18 @@ export class ShadowBook {
     const r = this.db.prepare(`SELECT max(CASE WHEN status = 'pending' THEN ? ELSE COALESCE(exit_at, entry_at, signal_at) END) last
       FROM shadow_trades WHERE variant = ? AND mint = ? AND status != 'filtered' AND signal_at <= ?`).get(Number.MAX_SAFE_INTEGER, v.name, mint, at) as { last: number | null };
     return r.last !== null && at - r.last < v.filters!.reentry_cooldown_s * 1000;
+  }
+
+  /**
+   * The variant's own latest results, for its cool-off after a losing streak. Only trades settled by
+   * now count: a result becomes known ~40s after the exit (settle runs every 30s), like a trader
+   * checking the screen, so a streak can start a little late but never early.
+   */
+  private recent(v: Variant, at: number): RecentResult[] {
+    const n = v.filters?.pause_after_losses ?? 0;
+    if (n <= 0) return [];
+    return (this.db.prepare(`SELECT pnl_sol > 0 won, exit_at closedAt FROM shadow_trades WHERE variant = ? AND status = 'closed' AND exit_at <= ?
+      ORDER BY exit_at DESC, signal_id DESC LIMIT ?`).all(v.name, at, n) as { won: number; closedAt: number }[]).map((r) => ({ won: !!r.won, closedAt: r.closedAt }));
   }
 
   /**

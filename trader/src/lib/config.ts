@@ -97,6 +97,10 @@ const SignalsSchema = z
     bad_creator_min_launches: z.number().int().positive(),
     bad_creator_max_success: z.number().min(0).max(1),
     use_brain: z.boolean(), // skip what the learning brain predicts will lose, once it passed its exam (it can only skip, never add trades)
+    // veteran habits (null / 0 = off)
+    max_curve_sol_per_min: z.number().positive().nullable(), // don't chase: skip a curve that filled faster than this since launch
+    pause_after_losses: z.number().int().nonnegative(), // cool off: after this many losses in a row...
+    pause_minutes: z.number().nonnegative(), // ...take no new trades for this long after the last one
   })
   .strict();
 
@@ -136,6 +140,9 @@ const ExitSchema = z
     take_profit_pct: z.number().positive().nullable(),
     trailing_stop_pct: z.number().positive().max(100).nullable(),
     max_hold_s: z.number().positive().max(RISK.TIME_EXIT_MS / 1000),
+    stop_loss_pct: z.number().positive().max(RISK.STOP_LOSS_PCT * 100), // a tighter stop than the hard one, never looser
+    breakeven_after_pct: z.number().positive().nullable(), // once up this much, the stop moves up to our entry price
+    cut_if_flat_s: z.number().positive().max(RISK.TIME_EXIT_MS / 1000).nullable(), // still not above our entry price after this long: get out
   })
   .strict()
   .partial();
