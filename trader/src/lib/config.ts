@@ -173,7 +173,7 @@ const NotifierSchema = z
       }
     }, "unknown time zone (use a name like UTC or Europe/London)"),
     usd_prices: z.boolean(),
-    voice: z.enum(["plain", "genz"]),
+    voice: z.enum(["plain", "genz", "plain-short", "genz-short"]),
   })
   .strict();
 

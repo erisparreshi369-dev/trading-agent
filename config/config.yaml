@@ -156,7 +156,7 @@ notifier:
   trade_alerts: true                  # a message for every trade we follow (skipped ones go in the hourly summary)
   timezone: UTC                       # clock times in messages, e.g. Europe/London; daily limits still reset at 00:00 UTC
   usd_prices: true                    # show dollar amounts next to SOL (SOL price from CoinGecko, refreshed every 10 min)
-  voice: genz                         # how messages sound: genz (notifier/messages-genz.ts) or plain (notifier/messages.ts)
+  voice: genz-short                   # how messages sound: genz (notifier/messages-genz.ts) or plain (notifier/messages.ts); add -short for one line per message (notifier/messages-short.ts)
 
 providers:
   # Where market data comes from. Keys live in .env (key_env names the variable); a provider whose

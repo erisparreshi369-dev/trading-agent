@@ -79,8 +79,8 @@ describe("Gen Z voice: every message keeps the house rules", () => {
 describe("the voice switch", () => {
   afterEach(() => setVoice("plain"));
 
-  it("ships Gen Z, and switching changes every message at once (summaries included)", () => {
-    expect(testConfig().notifier.voice).toBe("genz");
+  it("ships Gen Z (one line per message), and switching changes every message at once (summaries included)", () => {
+    expect(testConfig().notifier.voice).toBe("genz-short");
     expect(M).toBe(VOICES.plain); // until the notifier service sets it
     setVoice("genz");
     expect(M.unknownCommand()).toMatch(/^SORRY\nthe tea: /);
