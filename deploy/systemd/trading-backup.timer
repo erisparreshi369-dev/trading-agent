@@ -1,0 +1,12 @@
+[Unit]
+Description=trading-agent nightly database backup schedule
+
+[Timer]
+# quiet slot: after scoring (00:15) and the weekly report (Sun 01:00), before log rotation (03:30)
+OnCalendar=*-*-* 02:45:00 UTC
+# run on next boot if the machine was off at the scheduled time
+Persistent=true
+RandomizedDelaySec=60
+
+[Install]
+WantedBy=timers.target

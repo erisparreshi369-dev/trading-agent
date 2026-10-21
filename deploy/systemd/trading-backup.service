@@ -1,0 +1,14 @@
+[Unit]
+Description=trading-agent nightly database backup (with a test restore)
+OnFailure=trading-failure@%N.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=@ROOT@
+ExecStart=@ROOT@/.venv/bin/python scripts/backup_db.py
+StandardOutput=append:@ROOT@/logs/backup.log
+StandardError=append:@ROOT@/logs/backup.log
+# a background job: never slow the collector or the trader down
+Nice=10
+IOSchedulingClass=idle
+TimeoutStartSec=30min
