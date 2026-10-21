@@ -152,6 +152,39 @@ describe("shadow variants", () => {
     }
   });
 
+  it("TJR exits and entries: sell half on the way up, buy the pullback, skip when none comes", async () => {
+    const s = setup({
+      part: { exit: { leader_exit: false, partial_take_pct: 25, partial_sell_frac: 0.5 } },
+      pull: { exit: { leader_exit: false }, entry: { wait_dip_pct: 20, wait_s: 60 } },
+      no_dip: { entry: { wait_dip_pct: 50, wait_s: 30 } },
+      sold_first: { entry: { wait_dip_pct: 50, wait_s: 120 } },
+      ride: { exit: { leader_exit: false } },
+    });
+    try {
+      await scenario(s, (at, t0, tokens) => {
+        at(10_000, () => s.curve.movePrice(1.3, t0 + 10_000)); // +30%: part sells half, its stop moves to entry
+        at(20_000, () => s.curve.movePrice(0.7, t0 + 20_000)); // -30% from the high, under part's entry: pull buys, part's break-even stop takes the rest
+        at(40_000, () => s.curve.movePrice(0.95, t0 + 40_000));
+        at(60_000, () => s.curve.sell(s.leader, tokens, t0 + 60_000));
+      });
+      const part = s.shadow("part"), pull = s.shadow("pull"), ride = s.shadow("ride");
+      expect(part).toMatchObject({ status: "closed", exit_reason: "breakeven_stop" });
+      expect(part.exit_at).toBe(part.signal_at + 20_000 + s.delay);
+      expect(part.roi).toBeGreaterThan(0); // half sold at +30% covers the rest at about -9%
+      expect(ride.roi).toBeLessThan(0);
+      // two sells: two priority fees
+      expect(part.priority_fee_sol).toBeCloseTo(3 * s.cfg.paper.priority_fee_sol, 9);
+      expect(pull).toMatchObject({ status: "closed" });
+      expect(pull.entry_at).toBe(pull.signal_at + 20_000 + s.delay);
+      expect(pull.entry_price).toBeLessThan(ride.entry_price);
+      expect(pull.roi).toBeGreaterThan(ride.roi);
+      expect(s.shadow("no_dip")).toMatchObject({ status: "missed", reasons: JSON.stringify(["no pullback"]) });
+      expect(s.shadow("sold_first")).toMatchObject({ status: "missed", reasons: JSON.stringify(["leader sold before a pullback"]) });
+    } finally {
+      await s.trader.stop();
+    }
+  });
+
   it("a quiet coin that never moves is cut at the check time", async () => {
     const s = setup({ flat: { exit: { leader_exit: false, cut_if_flat_s: 60 } } });
     try {
@@ -310,6 +343,11 @@ describe("shadow config", () => {
     expect(live.filters).toEqual(cfg.signals);
     expect(live.exit).toEqual({
       leaderExit: true, stopLossPct: RISK.STOP_LOSS_PCT, takeProfitPct: null, trailingStopPct: null, maxHoldMs: RISK.TIME_EXIT_MS, breakevenAfterPct: null, cutIfFlatMs: null,
+      partialTakePct: null, partialSellFrac: 0.5,
+    });
+    expect(live.entry).toBeNull();
+    expect(vs.find((v) => v.name === "tjr")).toMatchObject({
+      entry: { waitDipPct: 0.1, waitMs: 120_000 }, exit: { partialTakePct: 0.25, partialSellFrac: 0.5 }, filters: { trade_hours_utc: [13, 21] },
     });
     expect(vs.find((v) => v.name === "veteran")!.exit).toMatchObject({ stopLossPct: 0.15, breakevenAfterPct: 0.25, cutIfFlatMs: 120_000 });
     // a variant's stop can be tighter than the hard one, never looser

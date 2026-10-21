@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import type { SignalsConfig } from "../src/lib/config.js";
 import { INGEST_MARGIN_MS } from "../src/paper/engine.js";
 import { SignalEngine, type LeaderTrade } from "../src/signals/engine.js";
-import { coolingOff, curveSolPerMin } from "../src/signals/filters.js";
+import { coolingOff, curveSolPerMin, inTradingHours } from "../src/signals/filters.js";
 import type { TokenInfoSource } from "../src/signals/token-info.js";
 import { Trader } from "../src/trader/trader.js";
 import { clock, Curve, key, memDb, testConfig } from "./helpers.js";
@@ -211,5 +211,32 @@ describe("veteran habits (filters)", () => {
     const later = setup({ pause_after_losses: 2, pause_minutes: 30 });
     lostTrades(later, 2, later.c.t - 31 * 60_000);
     expect((await later.signals.evaluate(leaderBuy(later))).decision).toBe("enter");
+  });
+});
+
+describe("TJR habits (filters)", () => {
+  const at = (h: number, m = 0) => Date.UTC(2026, 9, 21, h, m);
+  const hours = (trade_hours_utc: [number, number] | null) => ({ trade_hours_utc }) as SignalsConfig;
+
+  it("trading hours: [from, to) in UTC, wrapping past midnight; null trades around the clock", () => {
+    expect(inTradingHours(hours([13, 21]), at(12, 59))).toBe(false);
+    expect(inTradingHours(hours([13, 21]), at(13))).toBe(true);
+    expect(inTradingHours(hours([13, 21]), at(20, 59))).toBe(true);
+    expect(inTradingHours(hours([13, 21]), at(21))).toBe(false);
+    expect(inTradingHours(hours([22, 4]), at(23))).toBe(true);
+    expect(inTradingHours(hours([22, 4]), at(3, 59))).toBe(true);
+    expect(inTradingHours(hours([22, 4]), at(4))).toBe(false);
+    expect(inTradingHours(hours([0, 24]), at(23, 59))).toBe(true);
+    expect(inTradingHours(hours(null), at(5))).toBe(true);
+  });
+
+  it("outside trading hours the signal is skipped without spending RPC credits", async () => {
+    const h = new Date(setup().c.t).getUTCHours();
+    const s = setup({ trade_hours_utc: [(h + 1) % 24, (h + 2) % 24] });
+    const r = await s.signals.evaluate(leaderBuy(s));
+    expect(r).toMatchObject({ decision: "reject", reasons: [`outside trading hours ${(h + 1) % 24}-${(h + 2) % 24} UTC`] });
+    expect(s.info.calls).toBe(0);
+    const open = setup({ trade_hours_utc: [h, h + 1] });
+    expect((await open.signals.evaluate(leaderBuy(open))).decision).toBe("enter");
   });
 });

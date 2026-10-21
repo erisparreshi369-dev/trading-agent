@@ -27,7 +27,13 @@ HABITS = {
     "vet_breakeven": "once up 25%, never let it turn into a loss",
     "vet_cut_flat": "not above entry after 2 min: get out",
     "veteran": "all of the above together",
+    # TJR, "My UPDATED Day Trading Strategy (2026)"
+    "tjr_pullback": "TJR: wait for a 10% pullback, don't buy the spike",
+    "tjr_partial": "TJR: up 25%, sell half; the rest can't turn into a loss",
+    "tjr_hours": "TJR: only trade 13:00-21:00 UTC",
+    "tjr": "TJR: all three together",
 }
+HOURS_VARIANT = "all_signals"  # what following every signal did, by hour: the most trades to look at
 SETTLED = ("closed", "filtered", "missed")
 
 
@@ -67,19 +73,37 @@ def results(c: sqlite3.Connection, since: int, until: int) -> list[dict]:
     return [compare(c, v, since, until) | {"habit": HABITS[v]} for v in HABITS if v in have]
 
 
+def by_hour(c: sqlite3.Connection, since: int, until: int) -> list[dict]:
+    """Closed practice trades of HOURS_VARIANT per UTC hour of the signal: are some hours better? (TJR only trades the open.)"""
+    if c.execute("SELECT 1 FROM sqlite_master WHERE name = 'shadow_trades'").fetchone() is None:
+        return []
+    rows = c.execute(
+        """SELECT CAST(strftime('%H', signal_at / 1000, 'unixepoch') AS INTEGER) h, count(*), avg(roi), avg(roi > 0) FROM shadow_trades
+           WHERE variant = ? AND status = 'closed' AND signal_at >= ? AND signal_at < ? GROUP BY h ORDER BY h""",
+        (HOURS_VARIANT, since, until)).fetchall()
+    return [{"hour": h, "n": n, "roi": roi, "win": win} for h, n, roi, win in rows]
+
+
 def section(c: sqlite3.Connection, since: int, until: int, table, sol, pct) -> list[str]:
     """Weekly report section (the report passes its own formatting helpers)."""
     rs = results(c, since, until)
-    if not rs:
+    hours = by_hour(c, since, until)
+    if not rs and not hours:
         return []
-    md = ["## Veteran habits", "",
-          f"_Each habit is practice-traded next to `{BASE}` (our current rules) on the same signals; real paper trades don't use them. "
-          f"`gain per signal` = the habit's return minus `{BASE}`'s, a skipped trade counting as 0, with a rough 95% range. "
-          f"Verdict after {MIN_N} signals: `helps` / `hurts` only when the whole range is on one side of 0._", ""]
-    md.append(table(["habit", "variant", "signals", "trades (live)", "PnL SOL (live)", "gain per signal", "range", "verdict"], [
-        [r["habit"], f"`{r['variant']}`", str(r["n"]), f"{r['trades']} ({r['base_trades']})", f"{sol(r['pnl'])} ({sol(r['base_pnl'])})",
-         pct(r["diff"]), f"{pct(r['lo'])} to {pct(r['hi'])}" if r["lo"] is not None else "-", r["verdict"]]
-        for r in rs]))
+    md = ["## Veteran habits", ""]
+    if rs:
+        md += [f"_Each habit is practice-traded next to `{BASE}` (our current rules) on the same signals; real paper trades don't use them. "
+               f"`gain per signal` = the habit's return minus `{BASE}`'s, a skipped trade counting as 0, with a rough 95% range. "
+               f"Verdict after {MIN_N} signals: `helps` / `hurts` only when the whole range is on one side of 0._", ""]
+        md.append(table(["habit", "variant", "signals", "trades (live)", "PnL SOL (live)", "gain per signal", "range", "verdict"], [
+            [r["habit"], f"`{r['variant']}`", str(r["n"]), f"{r['trades']} ({r['base_trades']})", f"{sol(r['pnl'])} ({sol(r['base_pnl'])})",
+             pct(r["diff"]), f"{pct(r['lo'])} to {pct(r['hi'])}" if r["lo"] is not None else "-", r["verdict"]]
+            for r in rs]))
+    if hours:
+        md += ["", f"### By hour of day (UTC, `{HOURS_VARIANT}`)", "",
+               f"_Every signal practice-traded, grouped by the hour it came in. Under {MIN_N} trades an hour is mostly noise._", ""]
+        md.append(table(["hour", "trades", "avg return", "won"], [
+            [f"{h['hour']:02d}:00", str(h["n"]), pct(h["roi"]), f"{h['win'] * 100:.0f}%"] for h in hours]))
     return md + [""]
 
 
@@ -100,6 +124,11 @@ def main() -> int:
         rng = f" [{p(r['lo'])} .. {p(r['hi'])}]" if r["lo"] is not None else ""
         print(f"  {r['verdict']:>19}  {r['variant']:<14} {p(r['diff'])} per signal{rng}, {r['n']} signals, "
               f"{r['trades']} trades vs {r['base_trades']}  - {r['habit']}")
+    hours = by_hour(c, now - a.days * 86_400_000, now)
+    if hours:
+        print(f"\nBy hour of day (UTC), {HOURS_VARIANT} (under {MIN_N} trades is mostly noise):\n")
+        for h in hours:
+            print(f"  {h['hour']:02d}:00  {h['n']:>4} trades  {p(h['roi']):>7} avg  {h['win'] * 100:3.0f}% won")
     return 0
 
 

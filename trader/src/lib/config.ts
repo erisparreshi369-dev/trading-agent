@@ -101,6 +101,8 @@ const SignalsSchema = z
     max_curve_sol_per_min: z.number().positive().nullable(), // don't chase: skip a curve that filled faster than this since launch
     pause_after_losses: z.number().int().nonnegative(), // cool off: after this many losses in a row...
     pause_minutes: z.number().nonnegative(), // ...take no new trades for this long after the last one
+    // trading hours [from, to) in UTC; from > to wraps past midnight (e.g. [22, 4]); null = around the clock
+    trade_hours_utc: z.tuple([z.number().int().min(0).max(23), z.number().int().min(0).max(24)]).nullable(),
   })
   .strict();
 
@@ -143,9 +145,19 @@ const ExitSchema = z
     stop_loss_pct: z.number().positive().max(RISK.STOP_LOSS_PCT * 100), // a tighter stop than the hard one, never looser
     breakeven_after_pct: z.number().positive().nullable(), // once up this much, the stop moves up to our entry price
     cut_if_flat_s: z.number().positive().max(RISK.TIME_EXIT_MS / 1000).nullable(), // still not above our entry price after this long: get out
+    partial_take_pct: z.number().positive().nullable(), // once up this much, sell part (partial_sell_frac) and move the stop to our entry price
+    partial_sell_frac: z.number().gt(0).lt(1),
   })
   .strict()
   .partial();
+
+// When a shadow variant buys. Default: right away (our order lands execution_delay_ms after the leader's).
+const EntrySchema = z
+  .object({
+    wait_dip_pct: z.number().positive().max(90), // wait for the price to pull back this far from its high since the leader's buy...
+    wait_s: z.number().positive().max(600), // ...for at most this long; no pullback, or the leader sold first: no trade
+  })
+  .strict();
 
 const ShadowSchema = z
   .object({
@@ -156,6 +168,7 @@ const ShadowSchema = z
       z
         .object({
           filters: z.union([z.literal("none"), SignalsSchema.partial()]).optional(),
+          entry: EntrySchema.optional(),
           exit: ExitSchema.optional(),
           size_sol: z.number().positive().optional(),
           max_slippage_bps: z.number().positive().optional(),

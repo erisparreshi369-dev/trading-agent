@@ -3,7 +3,7 @@ import type { DB } from "../lib/db.js";
 import { log } from "../lib/log.js";
 import { RISK } from "../risk/limits.js";
 import { cheapReasons, rejectReasons, type Features, type RecentResult } from "../signals/filters.js";
-import { simulateFollow, stateAt, type ExitRule, type FollowTrade } from "../sim/follow.js";
+import { simulateFollow, stateAt, type EntryRule, type ExitRule, type FollowTrade } from "../sim/follow.js";
 import type { CostModel } from "../sim/market.js";
 
 /**
@@ -20,6 +20,7 @@ import type { CostModel } from "../sim/market.js";
 export interface Variant {
   name: string;
   filters: SignalsConfig | null; // null = take every signal
+  entry: EntryRule | null; // null = buy right after the leader
   exit: ExitRule;
   sizeSol: number;
   maxSlippageBps: number;
@@ -42,13 +43,14 @@ const OUTCOME_HORIZON_MS = 30 * 60_000;
 export function resolveVariants(cfg: Config): Variant[] {
   const base: ExitRule = {
     leaderExit: cfg.paper.follow_leader_exit, stopLossPct: RISK.STOP_LOSS_PCT, takeProfitPct: null, trailingStopPct: null, maxHoldMs: RISK.TIME_EXIT_MS,
-    breakevenAfterPct: null, cutIfFlatMs: null,
+    breakevenAfterPct: null, cutIfFlatMs: null, partialTakePct: null, partialSellFrac: 0.5,
   };
   return Object.entries(cfg.shadow.variants).map(([name, v]) => {
     const x = v.exit ?? {};
     return {
       name,
       filters: v.filters === "none" ? null : { ...cfg.signals, ...v.filters },
+      entry: v.entry ? { waitDipPct: v.entry.wait_dip_pct / 100, waitMs: v.entry.wait_s * 1000 } : null,
       exit: {
         ...base,
         ...(x.leader_exit !== undefined && { leaderExit: x.leader_exit }),
@@ -58,6 +60,8 @@ export function resolveVariants(cfg: Config): Variant[] {
         ...(x.stop_loss_pct !== undefined && { stopLossPct: Math.min(x.stop_loss_pct / 100, RISK.STOP_LOSS_PCT) }),
         ...(x.breakeven_after_pct !== undefined && { breakevenAfterPct: x.breakeven_after_pct === null ? null : x.breakeven_after_pct / 100 }),
         ...(x.cut_if_flat_s !== undefined && { cutIfFlatMs: x.cut_if_flat_s === null ? null : x.cut_if_flat_s * 1000 }),
+        ...(x.partial_take_pct !== undefined && { partialTakePct: x.partial_take_pct === null ? null : x.partial_take_pct / 100 }),
+        ...(x.partial_sell_frac !== undefined && { partialSellFrac: x.partial_sell_frac }),
       },
       sizeSol: v.size_sol ?? cfg.shadow.size_sol,
       maxSlippageBps: v.max_slippage_bps ?? cfg.paper.max_slippage_bps,
@@ -193,7 +197,9 @@ export class ShadowBook {
     const s = rows[0]!;
     const leader = this.db.prepare("SELECT t.price_sol FROM signals g JOIN trades t ON t.id = g.leader_trade_id WHERE g.id = ?").get(s.signal_id) as { price_sol: number | null } | undefined;
     const delay = this.cfg.paper.execution_delay_ms;
-    const tape = this.tape(s.mint, s.signal_at, s.signal_at + delay + RISK.TIME_EXIT_MS + delay + 60_000);
+    // a pullback entry buys up to its wait later, and holds from then on
+    const wait = Math.max(0, ...rows.map((r) => this.byName.get(r.variant)?.entry?.waitMs ?? 0));
+    const tape = this.tape(s.mint, s.signal_at, s.signal_at + wait + delay + RISK.TIME_EXIT_MS + delay + 60_000);
     const upd = this.db.prepare(`UPDATE shadow_trades SET status = @status, reasons = @reasons, entry_at = @entry_at, exit_at = @exit_at, exit_reason = @exit_reason,
       entry_price = @entry_price, exit_price = @exit_price, slippage_bps = @slippage_bps, pnl_sol = @pnl_sol, roi = @roi, platform_fee_sol = @platform,
       executor_fee_sol = @executor, priority_fee_sol = @priority, slippage_sol = @slippage, rent_sol = @rent, delay_sol = @delay, settled_at = @now
@@ -210,7 +216,7 @@ export class ShadowBook {
         }
         const res = simulateFollow(tape, {
           leaderWallet: r.leader_wallet, leaderAt: r.signal_at, leaderPrice: leader?.price_sol ?? null, sizeSol: r.size_sol, delayMs: delay,
-          maxSlippageBps: v.maxSlippageBps, cost: this.cost, exit: v.exit, dataUntil,
+          maxSlippageBps: v.maxSlippageBps, cost: this.cost, exit: v.exit, entry: v.entry, dataUntil,
         });
         if (res.status === "unknown") {
           if (now - r.signal_at > GIVE_UP_MS) upd.run({ ...blank, ...key, status: "gap", reasons: JSON.stringify(["no market data"]) });

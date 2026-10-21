@@ -107,6 +107,7 @@ signals:
   max_curve_sol_per_min: null   # don't chase: skip a coin whose curve filled faster than this (SOL per minute since launch)
   pause_after_losses: 0         # cool off: after this many losses in a row...
   pause_minutes: 30             # ...no new trades for this long after the last loss
+  trade_hours_utc: null         # only trade in these UTC hours, [from, to), e.g. [13, 21]; null = around the clock (tjr_hours tests it)
 
 paper:
   start_balance_sol: 1.0
@@ -129,7 +130,8 @@ shadow:
   # A variant is the live settings plus its overrides:
   #   filters: any `signals:` key, or `none` (take every signal, rejected ones included)
   #   exit:    leader_exit, take_profit_pct, trailing_stop_pct (from the peak), max_hold_s (<= 1800),
-  #            stop_loss_pct (<= the hard 25%), breakeven_after_pct, cut_if_flat_s
+  #            stop_loss_pct (<= the hard 25%), breakeven_after_pct, cut_if_flat_s, partial_take_pct + partial_sell_frac
+  #   entry:   wait_dip_pct + wait_s (buy on a pullback from the high instead of right away)
   #   size_sol
   #   max_slippage_bps (instead of paper.max_slippage_bps)
   # Loosening a filter means more signals get the on-chain checks (2 RPC credits each).
@@ -162,6 +164,13 @@ shadow:
     vet_cut_flat: { exit: { cut_if_flat_s: 120 } }                     # not above entry after 2 min: it isn't working, get out
     veteran: { filters: { max_curve_sol_per_min: 30, pause_after_losses: 3, pause_minutes: 30 },
                exit: { stop_loss_pct: 15, breakeven_after_pct: 25, cut_if_flat_s: 120 } }
+    # TJR's habits ("My UPDATED Day Trading Strategy (2026)"), one at a time and together; same weekly report section.
+    # His "only trade when both indexes agree" is conf_2 above (left out of `tjr`: 2 of 650 signals had a 2nd tracked buyer).
+    tjr_pullback: { entry: { wait_dip_pct: 10, wait_s: 120 } }               # don't buy the spike: wait for a 10% dip from the high (2 min max, else skip)
+    tjr_partial: { exit: { partial_take_pct: 25, partial_sell_frac: 0.5 } }  # up 25%: sell half, and the rest can't turn into a loss
+    tjr_hours: { filters: { trade_hours_utc: [13, 21] } }                    # only trade 13:00-21:00 UTC (US daytime; a guess to test, not picked from our data)
+    tjr: { entry: { wait_dip_pct: 10, wait_s: 120 }, exit: { partial_take_pct: 25, partial_sell_frac: 0.5 },
+           filters: { trade_hours_utc: [13, 21] } }
 
 notifier:
   watch_services: [collector, trader, brain]  # alert if one of these stops reporting

@@ -23,6 +23,14 @@ export function coolingOff(recent: RecentResult[], c: SignalsConfig, at: number)
   return last.every((r) => !r.won) && at - last[0]!.closedAt < c.pause_minutes * 60_000;
 }
 
+/** Trading hours: is `at` inside [from, to) UTC? Wraps past midnight when from > to. Null = always. */
+export function inTradingHours(c: SignalsConfig, at: number): boolean {
+  if (c.trade_hours_utc === null) return true;
+  const [from, to] = c.trade_hours_utc;
+  const h = new Date(at).getUTCHours();
+  return from <= to ? h >= from && h < to : h >= from || h < to;
+}
+
 /**
  * The signal filters as a pure function of the feature snapshot stored with every signal, so the
  * live engine and every shadow variant decide from identical inputs, and the decision can be
@@ -51,6 +59,7 @@ export function cheapReasons(f: Features, c: SignalsConfig, inCooldown: boolean,
     reasons.push(`chasing: curve filled ${speed.toFixed(1)} SOL/min > ${c.max_curve_sol_per_min}`);
   }
   if (coolingOff(recent, c, at)) reasons.push(`cooling off after ${c.pause_after_losses} loss${c.pause_after_losses === 1 ? "" : "es"} in a row`);
+  if (!inTradingHours(c, at)) reasons.push(`outside trading hours ${c.trade_hours_utc![0]}-${c.trade_hours_utc![1]} UTC`);
   // creator record stored before the decision (daily MadeOnSol job); unknown creators pass
   const launches = f.creator_launches;
   if (c.exclude_bad_creators && typeof launches === "number" && launches >= c.bad_creator_min_launches

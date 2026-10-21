@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -32,6 +33,18 @@ class Veteran(unittest.TestCase):
                        "VALUES (?, ?, 'w', 'm', 0, 'curve', 'enter', '[]', '{}')", (i, NOW - DAY))
         self.c.execute("""INSERT INTO shadow_trades (signal_id, variant, mint, leader_wallet, signal_at, status, size_sol, pnl_sol, roi)
                           VALUES (?, ?, 'm', 'w', ?, ?, 0.02, ?, ?)""", (i, variant, NOW - DAY, status, None if roi is None else roi * 0.02, roi))
+
+    def test_results_by_hour_of_day(self):
+        self.assertEqual(veteran.by_hour(self.c, 0, NOW), [])
+        for i, roi in enumerate([0.2, -0.1, -0.4]):
+            self.row(i, "all_signals", "closed", roi)
+        self.row(9, "all_signals", "filtered")  # only closed trades count
+        hour = time.gmtime((NOW - DAY) / 1000).tm_hour
+        [h] = veteran.by_hour(self.c, 0, NOW)
+        self.assertEqual((h["hour"], h["n"]), (hour, 3))
+        self.assertAlmostEqual(h["roi"], -0.1)
+        self.assertAlmostEqual(h["win"], 1 / 3)
+        self.assertIn(f"| {hour:02d}:00 | 3 |", "\n".join(veteran.section(self.c, 0, NOW, wr.table, wr.sol, wr.pct)))
 
     def test_a_filter_that_skips_losers_helps(self):
         for i in range(40):
