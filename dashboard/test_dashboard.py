@@ -140,6 +140,18 @@ class DashboardData(unittest.TestCase):
         self.assertEqual(y["rules"][0]["traders"], ["Peter Brandt"])
         self.assertEqual((y["studied"], y["looked_at"], y["checked_at"]), (1, 2, NOW - 1_000))
 
+    def test_veteran_habits(self):
+        w = connect(str(self.path))
+        sig = w.execute("SELECT min(id) FROM signals").fetchone()[0]
+        for variant, status, roi in (("live", "closed", -0.2), ("vet_no_chase", "filtered", None), ("vet_stop_15", "closed", -0.15)):
+            w.execute("""INSERT OR REPLACE INTO shadow_trades (signal_id, variant, mint, leader_wallet, signal_at, status, size_sol, pnl_sol, roi)
+                         VALUES (?, ?, 'm', 'w', ?, ?, 0.02, ?, ?)""", (sig, variant, NOW - 60_000, status, None if roi is None else roi * 0.02, roi))
+        w.close()
+        v = data.Snapshot(self.c, self.path).build({}, NOW)["learner"]["veteran"]
+        self.assertEqual([h["variant"] for h in v["habits"]], ["vet_no_chase", "vet_stop_15"])  # only habits with practice trades
+        self.assertAlmostEqual(v["habits"][0]["diff"], 0.2)  # skipping a -20% trade
+        self.assertEqual((v["habits"][0]["verdict"], v["started_at"], v["min_n"]), ("too early", NOW - 60_000, 30))
+
     def test_feed_seed_and_poll(self):
         f = data.Feed(self.c)
         f.seed()

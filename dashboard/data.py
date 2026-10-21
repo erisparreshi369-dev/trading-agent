@@ -514,7 +514,19 @@ class Snapshot:
         if brain and brain.get("model"):
             model = brain.pop("model")  # the learning brain's newest model (models/current.json was the pre-brain placeholder)
         return {"model": model, "report": report, "scoring": scoring, "scoring_at": scoring_hb["ts"] if scoring_hb else None, "brain": brain,
-                "youtube": self.youtube()}
+                "youtube": self.youtube(), "veteran": self.veteran()}
+
+    def veteran(self) -> dict | None:
+        """Veteran habits (practice only) against our current rules, all time: learner/veteran.py, same numbers as the weekly report."""
+        if not self.has("shadow_trades"):
+            return None
+        import sys
+        sys.path.insert(0, str(ROOT / "learner"))
+        import veteran  # read-only queries, standard library only
+
+        habits = veteran.results(self.c, 0, 2**62)
+        started = self.one(f"SELECT min(signal_at) FROM shadow_trades WHERE variant IN ({','.join('?' * len(veteran.HABITS))})", *veteran.HABITS)
+        return {"habits": habits, "started_at": started, "min_n": veteran.MIN_N}
 
     def youtube(self) -> dict | None:
         """What top traders teach on YouTube (learner/youtube.py) and what our own data says about each rule."""

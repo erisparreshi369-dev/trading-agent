@@ -721,6 +721,27 @@ function renderYoutube(y) {
     + `<div class="muted">${g("It counts what traders talk about, not whether they're for or against it.", "it counts what they talk about, not if they're for or against it.")}</div>`;
 }
 
+// veteran habits: practice-traded next to our current rules, never used for real until they prove themselves (learner/veteran.py)
+function renderVeteran(v) {
+  if (!v) return "";
+  const head = `<h3>${g("Trading like a 10-year veteran", "10-year vet mode")} <span class="muted">${g("practice only · each habit vs our current rules, same coins", "practice only · each habit vs our rules, same coins")}</span></h3>`;
+  if (!v.habits.length) {
+    return head + `<div class="empty">${g("No practice trades yet: they start with the trader's next coin.", "no practice trades yet. they start with the next coin.")}</div>`;
+  }
+  const TAG = { helps: g("helps", "W habit"), hurts: g("hurts", "L habit"), "no clear difference": g("no clear difference", "no diff"), "too early": g("too early", "too early") };
+  const line = (h) => {
+    const sofar = h.verdict === "too early"
+      ? ` · ${int(h.n)}/${int(v.min_n)} ${g("coins so far", "coins so far")}`
+      : ` · ${(Math.abs(h.diff) * 100).toFixed(1)} ${g("points", "pts")} ${h.diff >= 0 ? g("better", "better") : g("worse", "worse")} ${g("per coin", "per coin")} (${int(h.n)} ${g("coins", "coins")})`;
+    const trades = h.n ? ` · ${int(h.trades)} ${g("trades vs", "trades vs")} ${int(h.base_trades)}` : "";
+    return `<li title="${g("practice variant", "practice variant")} ${esc(h.variant)} · PnL ${sol(h.pnl)} SOL ${g("vs", "vs")} ${sol(h.base_pnl)} SOL${isNum(h.lo) ? ` · ${g("range", "range")} ${pct(h.lo)} ${g("to", "to")} ${pct(h.hi)}` : ""}">`
+      + `<span class="mem-tag vet-${h.verdict.replace(/ /g, "_")}">${TAG[h.verdict] || esc(h.verdict)}</span>`
+      + `<span>${esc(h.habit)} <span class="muted">${sofar}${trades}</span></span></li>`;
+  };
+  return head + `<ul class="lessons">${v.habits.map(line).join("")}</ul>`
+    + `<div class="muted">${g("Started", "started")} ${v.started_at ? agoSpan(v.started_at) : "–"} · ${g(`A verdict needs ${v.min_n} coins; "helps" only when the whole likely range is better.`, `verdict after ${v.min_n} coins. "W habit" only when it's better for sure-ish.`)}</div>`;
+}
+
 function renderLearner(L) {
   const [left, right] = renderBrain(L.brain).split("<!--split-->");
   let h = "";
@@ -743,7 +764,7 @@ function renderLearner(L) {
   } else {
     h += `<div class="empty">${g("No weekly report yet", "no weekly recap yet")} (${g("Sundays", "Sundays")} 01:00 UTC, ${g("or", "or")} <span class="mono">make weekly</span>).</div>`;
   }
-  $("learner").innerHTML = `<div class="brain-grid"><div>${left}${h}</div><div>${right ?? ""}${renderYoutube(L.youtube)}</div></div>`;
+  $("learner").innerHTML = `<div class="brain-grid"><div>${left}${h}</div><div>${right ?? ""}${renderVeteran(L.veteran)}${renderYoutube(L.youtube)}</div></div>`;
 }
 
 // Small markdown subset (what learner/weekly_report.py writes): headings, lists, tables, emphasis, code.

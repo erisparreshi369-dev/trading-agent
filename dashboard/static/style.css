@@ -450,6 +450,9 @@ body[data-tab="buddies"] .buddies-mini { display: none; }
 .mem-tag.yt-agrees { background: var(--w-soft); color: var(--w); }
 .mem-tag.yt-disagrees { background: var(--l-soft); color: var(--l); }
 .mem-tag.yt-no_difference, .mem-tag.yt-not_enough_data, .mem-tag.yt-untested { background: var(--line-2); color: var(--muted); }
+.mem-tag.vet-helps { background: var(--w-soft); color: var(--w); }
+.mem-tag.vet-hurts { background: var(--l-soft); color: var(--l); }
+.mem-tag.vet-no_clear_difference, .mem-tag.vet-too_early { background: var(--line-2); color: var(--muted); }
 .features table td { border: 0; padding: 3px 6px 3px 0; }
 .features .bar { height: 7px; background: var(--w); border-radius: 4px; }
 .features .bar.neg-bar { background: var(--l); }
