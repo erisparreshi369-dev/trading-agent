@@ -12,10 +12,12 @@ Videos never change what the bot does. A rule that sounds wise but loses money o
 written down as "our data disagrees". Phrase counts only say what traders talk about, not
 whether a sentence agrees with the rule ("don't worry about stop losses" still counts).
 
-YouTube blocks fast downloads ("Too Many Requests"), so it goes slowly and stops for the night
-when blocked (two refusals in a row); the next night carries on.
+YouTube blocks fast downloads ("Too Many Requests", or "Sign in to confirm you're not a bot"),
+so it goes slowly and stops for the night when blocked (two refusals in a row); the next night
+carries on. A video is written off as "no subtitles" only when yt-dlp ran cleanly and found none:
+any refusal or error means "couldn't check", never "nothing there".
 
-Usage: python learner/youtube.py [--db path] [--dry-run] [--no-fetch]
+Usage: python learner/youtube.py [--db path] [--dry-run] [--no-fetch] [--add LINK]
 """
 from __future__ import annotations
 
@@ -36,6 +38,7 @@ sys.path.insert(0, str(ROOT / "shared"))
 sys.path.insert(0, str(ROOT / "learner"))
 from migrate import connect, migrate  # noqa: E402
 import brain  # noqa: E402
+import veteran  # noqa: E402
 
 # The rules it listens for. Each has the phrases that point to it and how our data checks it:
 #   ("variants", a, b): paired shadow results, variant a (follows the rule) minus variant b (doesn't)
@@ -81,6 +84,25 @@ RULES: list[dict] = [
     {"key": "psychology", "words": "control your emotions and keep discipline",
      "phrases": r"psycholog|emotion|discipline|mindset|journal|ego\b",
      "test": None, "how": "can't be tested on a bot (it has no emotions): notes only"},
+    # Mark Douglas, Trading in the Zone (added 2026-10-21 from "9 Years of Trading Psychology in 37 Minutes")
+    {"key": "take_every_setup", "words": "take every valid setup, even after losses",
+     "phrases": r"every (?:single )?valid setup|take every (?:single )?(?:trade|setup|signal)|without hesitation|(?:don'?t|never) hesitate"
+                r"|follow (?:your |the )?(?:process|system|plan|rules)",
+     "test": ("habit", "vet_cool_off", -1), "how": "taking every signal vs sitting out 30 min after 3 losses in a row"},
+    {"key": "probabilities", "words": "think in probabilities: anything can happen, judge over many trades",
+     "phrases": r"probabilit|anything can happen|random distribution|\bexpectancy|law of large numbers|holy grail|100 ?(?:%|percent) win rate"
+                r"|(?:hundreds|thousands|series|sample) of trades|sample size|every (?:single )?(?:trade|moment) (?:within the market )?is unique",
+     "test": ("built_in",), "how": "one trade never changes a rule: the brain and these checks wait for 30+ trades before a verdict"},
+    {"key": "accept_risk_first", "words": "know your maximum loss before you enter",
+     "phrases": r"accept (?:the |your )?risk|max(?:imum)? loss|define (?:your )?risk|(?:already|completely) gone|risk before (?:you )?(?:enter|get in)",
+     "test": ("built_in",), "how": "every trade has a set size and a stop loss (25% by default), both fixed before it buys"},
+    {"key": "same_risk", "words": "risk the same way on every trade",
+     "phrases": r"same (?:size|amount|risk)|(?:consistent|fixed) (?:size|sizing|risk|position)|risk(?:s)? (?:\w+ )?identically|manage (?:your )?risk the same",
+     "test": ("built_in",), "how": "trade size comes from the settings, never from the last win or loss"},
+    {"key": "no_revenge", "words": "no need to be right: no revenge trades, no moving stops",
+     "phrases": r"revenge trad|(?:win|make) (?:it|that|the money) back|\btilt(?:ed)?\b|need to be right|prove (?:yourself|you'?re) right"
+                r"|mov(?:e|ing) (?:your |the )?stop",
+     "test": ("built_in",), "how": "it only buys on its rules and never widens a stop: a loss can't make it trade more"},
 ]
 for _r in RULES:
     _r["rx"] = re.compile(_r["phrases"], re.I)
@@ -129,7 +151,22 @@ def searches(cfg: dict, day: int) -> list[tuple[str, str | None]]:
 # ---------------------------------------------------------------- fetching (yt-dlp)
 
 class Blocked(Exception):
-    """YouTube said "Too Many Requests": stop for tonight."""
+    """YouTube refused us ("Too Many Requests", "confirm you're not a bot") or yt-dlp failed: couldn't check."""
+
+
+# how YouTube says it's blocking us; yt-dlp may print the 429 only as a warning, the bot check as the error
+BLOCK_SIGNS = re.compile(r"\b429\b|Too Many Requests|not a bot|Sign in to confirm", re.I)
+
+
+def refusal(p: subprocess.CompletedProcess) -> str | None:
+    """Why yt-dlp couldn't check (a sign of a block, even in a warning, or any ERROR), or None if it ran cleanly.
+    Callers ask only when nothing came back: a 429 on one page doesn't matter if the subtitles arrived anyway."""
+    lines = [x for x in p.stderr.strip().splitlines() if x.strip()]
+    errors = [x for x in lines if x.startswith("ERROR")]
+    signs = [x for x in lines if BLOCK_SIGNS.search(x)]
+    if errors or signs or p.returncode != 0:
+        return (errors or signs or lines or [f"yt-dlp exit {p.returncode}"])[-1][:300]
+    return None
 
 
 def ytdlp() -> str:
@@ -142,15 +179,26 @@ def ytdlp() -> str:
     return found
 
 
+def js_runtime() -> list[str]:
+    """YouTube needs a JavaScript runtime in yt-dlp now; node is installed for the trader."""
+    node = shutil.which("node") or ("/usr/bin/node" if Path("/usr/bin/node").exists() else None)
+    return ["--js-runtimes", f"node:{node}"] if node else []
+
+
 def run(args: list[str], timeout: int = 180) -> subprocess.CompletedProcess:
-    p = subprocess.run([ytdlp(), "--no-warnings", "--ignore-config", *args], capture_output=True, text=True, timeout=timeout)
-    if "429" in p.stderr or "Too Many Requests" in p.stderr:
-        raise Blocked(p.stderr.strip().splitlines()[-1] if p.stderr.strip() else "429")
-    return p
+    return subprocess.run([ytdlp(), "--ignore-config", *js_runtime(), *args], capture_output=True, text=True, timeout=timeout)
 
 
 def search(query: str, n: int) -> list[dict]:
-    p = run([f"ytsearch{n}:{query}", "--flat-playlist", "--print", "%(id)s\t%(title)s\t%(channel,uploader)s\t%(duration)s"])
+    return listed(f"ytsearch{n}:{query}")
+
+
+def listed(target: str) -> list[dict]:
+    """The videos a search or a single video link points to: [{id, title, channel, duration_s}]."""
+    p = run([target, "--flat-playlist", "--print", "%(id)s\t%(title)s\t%(channel,uploader)s\t%(duration)s"])
+    why = refusal(p)
+    if why and not p.stdout.strip():
+        raise Blocked(why)
     out = []
     for line in p.stdout.splitlines():
         parts = line.split("\t")
@@ -163,16 +211,19 @@ def search(query: str, n: int) -> list[dict]:
     return out
 
 
-def subtitles(video_id: str) -> str | None:
-    """The English subtitles as plain text, or None if the video has none."""
+def subtitles(video_id: str, run=run) -> str | None:
+    """The English subtitles as plain text, or None if the video has none. Raises Blocked if it couldn't check."""
     # the original English captions first: "en" on a dubbed video is a bundle of translations YouTube refuses (429)
     for lang in ("en-orig", "en"):
         with tempfile.TemporaryDirectory() as d:
-            run(["--skip-download", "--write-subs", "--write-auto-subs", "--sub-langs", lang, "--sub-format", "vtt",
-                 "--sleep-requests", "2", "--sleep-subtitles", "3", "-o", f"{d}/%(id)s", "--", video_id])
+            p = run(["--skip-download", "--write-subs", "--write-auto-subs", "--sub-langs", lang, "--sub-format", "vtt",
+                     "--sleep-requests", "2", "--sleep-subtitles", "3", "-o", f"{d}/%(id)s", "--", video_id])
             files = sorted(Path(d).glob("*.vtt"))
             if files:
                 return vtt_text(files[0].read_text(errors="replace"))
+            why = refusal(p)
+            if why:
+                raise Blocked(why)
     return None
 
 
@@ -212,6 +263,7 @@ def fetch_new(c: sqlite3.Connection, cfg: dict, now_ms: int, write: bool, find=s
             for v in find(query, cfg["per_search"]):
                 if done >= cfg["max_videos"]:
                     break
+                # 'retry' (set by hand, e.g. videos a block was mistaken for "no subtitles") counts as never checked
                 if known.get(v["id"]) in ("ok", "no_subs", "refused") or (v["duration_s"] or 0) > cfg["max_duration_min"] * 60:
                     continue
                 sleep(cfg["sleep_s"])
@@ -248,11 +300,23 @@ def save_video(c: sqlite3.Connection, v: dict, query: str, trader: str | None, n
                len(text.split()) if text else None, text, json.dumps(count_rules(text)) if text else None))
 
 
+def add_video(c: sqlite3.Connection, link: str, now_ms: int, find=listed, subs=subtitles) -> dict:
+    """Study one video picked by hand (e.g. one the owner watched), outside the nightly searches."""
+    found = find(link)
+    if not found:
+        raise ValueError(f"no YouTube video found at {link}")
+    v = found[0]
+    text = subs(v["id"])
+    save_video(c, v, "added by hand", None, now_ms, "ok" if text else "no_subs", text)
+    return {**v, "trader": None, "subs": bool(text), "rules": count_rules(text) if text else {}}
+
+
 def heard(c: sqlite3.Connection) -> dict:
-    """What every video ever studied said: {rule: {videos, mentions, traders, first, last}}."""
+    """What every video ever studied said: {rule: {videos, mentions, traders, first, last}}.
+    Counted again from the kept transcripts, so a rule added later also hears the old videos."""
     out: dict = {}
-    for trader, found_at, rules in c.execute("SELECT trader, found_at, rules FROM yt_videos WHERE status = 'ok' ORDER BY found_at"):
-        for k, n in json.loads(rules or "{}").items():
+    for trader, found_at, rules, text in c.execute("SELECT trader, found_at, rules, transcript FROM yt_videos WHERE status = 'ok' ORDER BY found_at"):
+        for k, n in (count_rules(text) if text else json.loads(rules or "{}")).items():
             h = out.setdefault(k, {"videos": 0, "mentions": 0, "traders": [], "first": found_at, "last": found_at})
             h["videos"] += 1
             h["mentions"] += n
@@ -279,9 +343,16 @@ def check(c: sqlite3.Connection, rule: dict, cfg: dict, lessons: dict) -> dict:
     t = rule["test"]
     if t is None:
         return {"verdict": "untested"}
+    if t[0] == "built_in":
+        return {"verdict": "built_in"}
     if t[0] == "variants":
         r = paired(c, t[1], t[2])
         n, diff = r["n"], r.get("diff")
+    elif t[0] == "habit":
+        # a habit skips signals, so both closed isn't enough: veteran.compare counts a skipped trade as 0
+        v = veteran.compare(c, t[1], 0, 2**62)
+        n, diff = v["n"], None if v["diff"] is None else v["diff"] * t[2]
+        r = {"n": n, "diff": diff}
     else:
         l = lessons.get(t[1])
         if not l:
@@ -296,7 +367,8 @@ def check(c: sqlite3.Connection, rule: dict, cfg: dict, lessons: dict) -> dict:
 
 
 VERDICT_WORDS = {"agrees": "our data agrees", "disagrees": "our data disagrees", "no_difference": "our data sees no real difference",
-                 "not_enough_data": "not enough of our data yet", "untested": "we can't test it yet"}
+                 "not_enough_data": "not enough of our data yet", "untested": "we can't test it yet",
+                 "built_in": "the bot already works this way"}
 
 
 def rule_text(rule: dict, h: dict, v: dict) -> str:
@@ -304,7 +376,7 @@ def rule_text(rule: dict, h: dict, v: dict) -> str:
     s = f"\"{rule['words']}\": heard in {h.get('videos', 0)} videos{who}; {VERDICT_WORDS[v['verdict']]}"
     if v["verdict"] in ("agrees", "disagrees", "no_difference"):
         s += f" — {rule['how']}: {abs(v['diff']) * 100:.1f} points {'better' if v['diff'] > 0 else 'worse'} ({v['n']} trades)"
-    elif v["verdict"] == "untested":
+    elif v["verdict"] in ("untested", "built_in"):
         s += f" — {rule['how']}"
     return s + "."
 
@@ -351,11 +423,15 @@ def main() -> int:
     ap.add_argument("--db", default=os.environ.get("DB_PATH", str(ROOT / "data/trading.db")))
     ap.add_argument("--dry-run", action="store_true", help="study and print, write nothing")
     ap.add_argument("--no-fetch", action="store_true", help="don't download anything, just re-check the rules")
+    ap.add_argument("--add", metavar="LINK", help="study this one video first (a link or id), then re-check the rules")
     a = ap.parse_args()
     cfg = load_config()
     c = connect(a.db)
     if not a.dry_run:
         migrate(c)
+    if a.add and not a.dry_run:
+        v = add_video(c, a.add, int(time.time() * 1000))
+        print(f"added: {v['title']} [{v.get('channel') or '?'}] rules: {', '.join(v['rules']) or 'none'}" + ("" if v["subs"] else " (no subtitles)"))
     r = study(c, cfg, write=not a.dry_run, fetch=not a.no_fetch)
     c.close()
     ok = sum(1 for v in r["new_videos"] if v["subs"])

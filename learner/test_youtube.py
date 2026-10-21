@@ -97,6 +97,96 @@ class Checking(unittest.TestCase):
         rule = next(r for r in youtube.RULES if r["key"] == "psychology")
         self.assertEqual(youtube.check(db(), rule, CFG, {})["verdict"], "untested")
 
+    def test_built_in(self):
+        rule = next(r for r in youtube.RULES if r["key"] == "same_risk")
+        v = youtube.check(db(), rule, CFG, {})
+        self.assertEqual(v["verdict"], "built_in")
+        self.assertIn("already works this way", youtube.rule_text(rule, {}, v))
+
+    def test_habit_counts_skipped_signals_as_zero(self):
+        c = db()
+        shadow(c, "live", [0.10] * 40)
+        shadow(c, "vet_cool_off", [0.10] * 20)  # traded the first 20 like live...
+        for i in range(21, 41):  # ...and sat out the other 20, which live won
+            c.execute("""INSERT INTO shadow_trades (signal_id, variant, mint, leader_wallet, signal_at, status, size_sol)
+                         VALUES (?, 'vet_cool_off', 'm', 'w', ?, 'filtered', 0.02)""", (i, i))
+        c.execute("UPDATE shadow_trades SET pnl_sol = roi * size_sol WHERE status = 'closed'")
+        rule = next(r for r in youtube.RULES if r["key"] == "take_every_setup")
+        v = youtube.check(c, rule, CFG, {})
+        self.assertEqual(v["n"], 40)
+        self.assertAlmostEqual(v["diff"], 0.05)  # taking every signal: 5 points better per signal
+        self.assertEqual(v["verdict"], "agrees")
+        self.assertEqual(youtube.check(db(), rule, CFG, {})["verdict"], "not_enough_data")
+
+
+class Douglas(unittest.TestCase):
+    # lines from "9 Years of Trading Psychology in 37 Minutes" (Trading in the Zone), watched 2026-10-21
+    def test_his_lines_are_heard(self):
+        said = {
+            "take_every_setup": "if you don't take every single valid setup, then you are losing probability",
+            "probabilities": "number one, within trading, anything can happen",
+            "accept_risk_first": "you have to accept the risk that you guys are taking before entering the trade",
+            "same_risk": "you have to manage your risk identically each time",
+            "no_revenge": "and then you start revenge trading",
+        }
+        for key, line in said.items():
+            self.assertIn(key, youtube.count_rules(line), line)
+
+    def test_old_transcripts_are_counted_again(self):
+        c = db()
+        youtube.save_video(c, {"id": "old"}, "q", None, 1, "ok", "anything can happen")
+        c.execute("UPDATE yt_videos SET rules = '{}'")  # counted before the rule existed
+        self.assertEqual(youtube.heard(c)["probabilities"]["videos"], 1)
+
+    def test_add_video_by_hand(self):
+        c = db()
+        found = lambda link: [{"id": "88tyzO9CxGA", "title": "9 Years", "channel": None, "duration_s": 2236.0}]  # noqa: E731
+        v = youtube.add_video(c, "https://www.youtube.com/watch?v=88tyzO9CxGA", 5, find=found, subs=lambda vid: "revenge trading")
+        self.assertEqual(v["rules"], {"no_revenge": 1})
+        self.assertEqual(c.execute("SELECT search, status FROM yt_videos").fetchone(), ("added by hand", "ok"))
+        with self.assertRaises(ValueError):
+            youtube.add_video(c, "nope", 5, find=lambda link: [], subs=lambda vid: None)
+
+
+def ytdlp_result(stderr: str, code: int = 0, vtt: str | None = None):
+    """A fake yt-dlp run: writes the subtitle file into the -o folder if `vtt` is given."""
+    import subprocess
+
+    def run(args):
+        if vtt is not None:
+            out = args[args.index("-o") + 1].replace("%(id)s", "vid")
+            Path(out + ".en.vtt").write_text(vtt)
+        return subprocess.CompletedProcess(args, code, "", stderr)
+    return run
+
+
+# what yt-dlp printed on 2026-10-21 when YouTube blocked this machine
+BOT_CHECK = """WARNING: [youtube] x: Unable to download webpage: HTTP Error 429: Too Many Requests (caused by <HTTPError 429: Too Many Requests>)
+ERROR: [youtube] x: Sign in to confirm you’re not a bot. Use --cookies-from-browser or --cookies for the authentication."""
+
+
+class Fetching(unittest.TestCase):
+    def test_bot_check_is_a_block_not_missing_subtitles(self):
+        with self.assertRaises(youtube.Blocked) as e:
+            youtube.subtitles("x", run=ytdlp_result(BOT_CHECK, code=1))
+        self.assertIn("not a bot", str(e.exception))
+
+    def test_a_429_warning_alone_is_a_block_when_nothing_came_back(self):
+        with self.assertRaises(youtube.Blocked):
+            youtube.subtitles("x", run=ytdlp_result("WARNING: Unable to download video subtitles for 'en-orig': HTTP Error 429: Too Many Requests"))
+
+    def test_any_error_means_couldnt_check(self):
+        with self.assertRaises(youtube.Blocked):
+            youtube.subtitles("x", run=ytdlp_result("ERROR: [youtube] x: Video unavailable", code=1))
+
+    def test_clean_run_without_subtitles_is_no_subtitles(self):
+        self.assertIsNone(youtube.subtitles("x", run=ytdlp_result("WARNING: There are no subtitles for the requested languages")))
+
+    def test_subtitles_that_arrived_count_even_after_a_429_on_the_page(self):
+        vtt = "WEBVTT\n\n00:00:01.000 --> 00:00:02.000\ncut your losses fast\n"
+        text = youtube.subtitles("x", run=ytdlp_result(BOT_CHECK.splitlines()[0], vtt=vtt))
+        self.assertIn("cut your losses fast", text)
+
 
 class Night(unittest.TestCase):
     def fake(self, blocked_after: int | None = None):
@@ -152,6 +242,15 @@ class Night(unittest.TestCase):
         self.assertEqual(len(r["new_videos"]), CFG["max_videos"])
         youtube.study(c, CFG, now_ms=86_400_000 * 11, **f)  # refused again: given up for good
         self.assertIn("refused", {s for (s,) in c.execute("SELECT status FROM yt_videos")})
+
+    def test_retry_videos_are_checked_again(self):
+        c = db()
+        f, _ = self.fake()
+        youtube.study(c, CFG, now_ms=86_400_000 * 10, **f)
+        c.execute("UPDATE yt_videos SET status = 'retry'")
+        r = youtube.study(c, CFG, now_ms=86_400_000 * 10, **f)  # same day: the same searches find the same videos
+        self.assertEqual(len(r["new_videos"]), CFG["max_videos"])
+        self.assertEqual(c.execute("SELECT count(*) FROM yt_videos WHERE status = 'retry'").fetchone()[0], 0)
 
     def test_dry_run_writes_nothing(self):
         c = db()
