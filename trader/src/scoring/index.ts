@@ -2,11 +2,13 @@
 import { env, loadConfig } from "../lib/config.js";
 import { heartbeat, openDb } from "../lib/db.js";
 import { log } from "../lib/log.js";
+import { followOverrides } from "../lib/overrides.js";
 import { outOfSample, saveOutOfSample } from "./oos.js";
 import { applyScores, scoreWallets } from "./score.js";
 
 const cfg = loadConfig();
 const db = openDb(env.dbPath);
+followOverrides(cfg, db, { everyMs: 0 }); // the owner's limits from the dashboard, once
 const t0 = Date.now();
 const scores = scoreWallets(db, cfg.scoring, cfg.paper);
 const res = applyScores(db, scores, cfg.scoring);

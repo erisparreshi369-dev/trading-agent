@@ -35,8 +35,8 @@ export class Trader {
     killFile: string,
     private now: () => number = Date.now,
   ) {
-    // paper trading: practice limits (limits.ts PAPER_NO_LIMITS); the Phase 5 live executor must use limitsFor("live")
-    this.risk = new RiskManager(db, killFile, now, limitsFor("paper"));
+    // paper trading: the owner's limits, re-read at every check (limits.ts); the Phase 5 live executor must use limitsFor("live", db)
+    this.risk = new RiskManager(db, killFile, now, () => limitsFor("paper", db));
     this.paper = new PaperEngine(db, cfg.paper, this.risk, now);
     this.signals = new SignalEngine(db, cfg.signals, info, this.paper, now);
     this.shadow = new ShadowBook(db, cfg, now);
@@ -98,6 +98,11 @@ export class Trader {
       this.db.prepare("INSERT INTO kv (key, value) VALUES ('trader.cursor', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(String(this.cursor));
     }
     return rows.length;
+  }
+
+  /** The dashboard changed a limit in cfg (lib/overrides.ts): rebuild what copied it at start. */
+  settingsChanged(): void {
+    this.shadow.reload();
   }
 
   /** Wait for queued signal evaluations (tests). */

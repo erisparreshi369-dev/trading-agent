@@ -182,8 +182,12 @@ def main() -> int:
 
     print(f"\n{B}paper trading{X}")
     lim = (ROOT / "trader/src/risk/limits.ts").read_text()
-    if "export const PAPER_NO_LIMITS = true" in lim:
-        print(f"  {Y}practice limits OFF{X} {D}(no cap on open trades, trades/day, size, losses; real-money limits stay locked){X}")
+    sw = q("SELECT value FROM kv WHERE key = 'override.risk.PAPER_NO_LIMITS'") if has_table(c, "kv") else None
+    if (sw[0] == "1") if sw and sw[0] in ("0", "1") else "export const PAPER_NO_LIMITS = true" in lim:
+        print(f"  {Y}practice limits OFF{X} {D}(no cap on open trades, trades/day, size, losses; switch it on the dashboard's Limits tab){X}")
+    changed = c.execute("SELECT count(*) FROM kv WHERE key LIKE 'override.%'").fetchone()[0] if has_table(c, "kv") else 0
+    if changed:
+        print(f"  {Y}{changed} limit(s) changed on the dashboard{X} {D}(Limits tab shows which){X}")
     acct = q("SELECT balance_sol, start_balance FROM paper_account WHERE id = 1") if has_table(c, "paper_account") else None
     if not acct:
         print(f"  {D}not started{X}")

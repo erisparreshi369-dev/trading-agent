@@ -45,11 +45,15 @@ After a reboot everything starts by itself (linger). `make drill` re-verifies re
 
 ## Changing limits on the dashboard
 
-The **Daily data limit** (Data collection panel) and **Daily job stops at** (MadeOnSol panel) can be
-changed on the page; they stay until you press "Back to normal". The collector picks a new data
-limit up within ~5 s. A raised data limit is still capped by the monthly guard shown next to it:
+Every limit is on the **Limits** tab: trading safety (size, open trades, trades a day, stop loss,
+time exit, loss stops, fee reserve, practice-without-limits switch, max price jump), which buys we
+copy, which traders we follow (used at the nightly check), and data limits. Changes stay until you
+press "Back to normal"; the bot picks them up within ~5 s, no restart. Trading safety values can
+never go past the walls in `trader/src/risk/limits.ts`, live or practice. The **Daily data limit**
+(also in the Data collection panel) and **Daily job stops at** (also in the MadeOnSol panel) work as
+before. A raised data limit is still capped by the monthly guard shown next to it:
 using more today leaves less for the following days, and the plan's monthly credits can't run out.
-Each change sends a `SETTINGS` Telegram message. To clear them by hand:
+Each change sends a `SETTINGS` Telegram message; `make status` counts how many are changed. To clear them by hand:
 `sqlite3 data/trading.db "DELETE FROM kv WHERE key LIKE 'override.%'"`.
 
 ## MadeOnSol helper (optional)

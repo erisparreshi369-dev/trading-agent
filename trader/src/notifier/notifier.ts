@@ -5,10 +5,10 @@ import type { Config } from "../lib/config.js";
 import { heartbeat, type DB } from "../lib/db.js";
 import { log } from "../lib/log.js";
 import type { RunState } from "../lib/service.js";
-import { RISK } from "../risk/limits.js";
+import { limitsFor } from "../risk/limits.js";
 import { RiskManager } from "../risk/risk-manager.js";
 import {
-  account, buyFacts, DAY, fillsSince, HOUR, missedFacts, partHealth, period, pnlFacts, reportFacts, sellFacts, signalFacts, statusFacts,
+  account, brainMemoryFacts, buyFacts, DAY, fillsSince, HOUR, missedFacts, partHealth, period, pnlFacts, reportFacts, sellFacts, signalFacts, statusFacts,
   utcDayStart, whyFacts,
 } from "./data.js";
 import type { Ctx } from "./messages.js";
@@ -265,6 +265,8 @@ export class Notifier {
           ok = await this.say(M.settingChanged(c, {
             setting: String(data.setting), from: Number(data.from), to: Number(data.to), reset: !!data.reset,
             guardMb: data.guardMb == null ? null : Number(data.guardMb), limit: data.limit == null ? null : Number(data.limit),
+            ...(typeof data.label === "string" && { label: data.label }), ...(typeof data.fromText === "string" && { fromText: data.fromText }),
+            ...(typeof data.toText === "string" && { toText: data.toText }), ...(typeof data.group === "string" && { group: data.group }),
           }));
           break;
         case "madeonsol_budget":
@@ -427,7 +429,7 @@ export class Notifier {
         if (!w.found) return M.whyNotFound(c.args.trim());
         if (w.total === 0) return M.whyNothing(w.token);
         return M.why(ctx, w.token, w.events, w.total, w.sameName, {
-          stopLossPct: RISK.STOP_LOSS_PCT, maxHoldMs: RISK.TIME_EXIT_MS, maxSlippage: this.d.cfg.paper.max_slippage_bps / 10_000,
+          stopLossPct: limitsFor("paper", this.d.db).STOP_LOSS_PCT, maxHoldMs: limitsFor("paper", this.d.db).TIME_EXIT_MS, maxSlippage: this.d.cfg.paper.max_slippage_bps / 10_000,
         });
       }
       case "quiet": {

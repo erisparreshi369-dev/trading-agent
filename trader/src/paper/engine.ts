@@ -2,7 +2,6 @@ import type { PaperConfig } from "../lib/config.js";
 import type { DB } from "../lib/db.js";
 import { log } from "../lib/log.js";
 import { bondingCurve, canonicalPool } from "../collector/pools.js";
-import { RISK } from "../risk/limits.js";
 import type { EntryDecision, RiskManager } from "../risk/risk-manager.js";
 import { maxSlippageBps } from "../lib/safe-settings.js";
 import { simulateBuy, simulateSell, slippageBps, stateFromTrade, type CostBreakdown, type CostModel, type MarketState, type TradeRowLike } from "../sim/market.js";
@@ -113,7 +112,7 @@ export class PaperEngine {
     const dayStart = Date.parse(new Date(this.now()).toISOString().slice(0, 10));
     const entriesToday = (this.db.prepare("SELECT count(*) n FROM paper_positions WHERE entry_due_at >= ?").get(dayStart) as { n: number }).n;
     const leaderRecentEntries = (this.db.prepare(`SELECT count(*) n FROM (SELECT leader_wallet FROM paper_positions WHERE status != 'failed'
-      ORDER BY id DESC LIMIT ?) WHERE leader_wallet = ?`).get(RISK.WALLET_SHARE_WINDOW, leader.wallet) as { n: number }).n;
+      ORDER BY id DESC LIMIT ?) WHERE leader_wallet = ?`).get(this.risk.limits.WALLET_SHARE_WINDOW, leader.wallet) as { n: number }).n;
     const decision = this.risk.checkEntry({ equity: this.equity(), freeBalance: balance, startBalance: start, openPositions: live.length, entriesToday, leaderRecentEntries });
     if (!decision.ok) return decision;
 
@@ -155,6 +154,7 @@ export class PaperEngine {
     this.risk.tick({ equity: this.equity(), startBalance: start });
     const kill = this.risk.isKilled();
     const now = this.now();
+    const timeExitMs = this.risk.limits.TIME_EXIT_MS;
     for (const p of this.live()) {
       if (kill.killed) {
         if (p.status === "pending") this.failEntry(p, "kill switch", 0);
@@ -162,8 +162,8 @@ export class PaperEngine {
         continue;
       }
       if (p.status === "pending" && now >= p.entry_due_at + INGEST_MARGIN_MS) this.fillEntry(p);
-      else if (p.status === "open" && p.exit_due_at === null && now - p.opened_at! >= RISK.TIME_EXIT_MS) {
-        this.triggerExit(p, "time_exit", p.opened_at! + RISK.TIME_EXIT_MS);
+      else if (p.status === "open" && p.exit_due_at === null && now - p.opened_at! >= timeExitMs) {
+        this.triggerExit(p, "time_exit", p.opened_at! + timeExitMs);
       }
     }
     for (const p of this.live()) {

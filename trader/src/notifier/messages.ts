@@ -33,6 +33,12 @@ export interface Ctx {
   now: number;
 }
 
+/** A limit changed on the dashboard (alert kind setting_changed). The Limits tab adds the label and both values in words. */
+export interface SettingChange {
+  setting: string; from: number; to: number; reset: boolean; guardMb: number | null; limit: number | null;
+  label?: string; fromText?: string; toText?: string; group?: string;
+}
+
 export type Mood = "good" | "careful" | "bad" | "normal";
 const MOOD: Record<Mood, string> = { good: "✅ Good", careful: "⚠️ Be careful", bad: "🚨 Bad", normal: "😐 Normal" };
 
@@ -624,7 +630,8 @@ export function dataBudget(c: Ctx, d: { pct: number; mbToday: number; capMb: num
 }
 
 /** A limit was changed on the dashboard (or set back to normal). */
-export function settingChanged(c: Ctx, d: { setting: string; from: number; to: number; reset: boolean; guardMb: number | null; limit: number | null }): string {
+export function settingChanged(c: Ctx, d: SettingChange): string {
+  if (d.setting !== "helius_daily_mb_cap" && d.setting !== "madeonsol_stop_pct") return limitChanged(c, d);
   const data = d.setting === "helius_daily_mb_cap";
   const what = data ? "the daily market-data limit" : "where the daily MadeOnSol job stops";
   const value = (x: number) => (data ? `${Math.round(x)} MB` : `${Math.round(x)}% of its ${d.limit ?? 200} requests`);
@@ -635,6 +642,21 @@ export function settingChanged(c: Ctx, d: { setting: string; from: number; to: n
     why: data ? "More data lets the bot follow the market longer each day." : "The helper may now ask MadeOnSol more often each day.",
     extra: [data && d.guardMb !== null && `It still never uses up the month's free data: today it can use at most ${Math.round(d.guardMb)} MB.`],
     todo: d.reset ? NOTHING : "Nothing. To undo it, change it back on the dashboard.",
+  });
+}
+
+/** Any other limit changed on the dashboard (Limits tab); the dashboard sends the label and both values already in words. */
+function limitChanged(c: Ctx, d: SettingChange): string {
+  const what = d.label ?? d.setting;
+  const from = d.fromText ?? String(d.from), to = d.toText ?? String(d.to);
+  return render({
+    title: "SETTINGS · A limit was changed",
+    happened: d.reset ? `You set "${what}" back to normal: ${to}.` : `You changed "${what}" from ${from} to ${to} on the dashboard.`,
+    mood: d.group === "safety" ? "careful" : "normal",
+    why: d.group === "safety" ? "Practice trades use it from now on. Real-money trading will too, but never past the safety walls in the code."
+      : d.group === "wallets" ? "The nightly trader check (00:15 UTC) uses it from tonight."
+      : "The bot uses it within a few seconds.",
+    todo: d.reset ? NOTHING : "Nothing. To undo it, use \"Back to normal\" on the dashboard's Limits tab.",
   });
 }
 

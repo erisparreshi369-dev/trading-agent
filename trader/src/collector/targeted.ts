@@ -20,7 +20,7 @@ export class TargetedSubscriptions {
   private nextId = 1000;
   stats = { subscribed: 0, unsubscribed: 0, errors: 0, overCap: 0 };
 
-  constructor(private ws: ReconnectingWs, private max: number) {}
+  constructor(private ws: ReconnectingWs, public max: number) {} // max: the collector updates it when the dashboard changes the limit
 
   /** Used as the ReconnectingWs onOpenMessages hook. */
   openMessages(): unknown[] {

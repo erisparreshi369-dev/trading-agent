@@ -1,5 +1,6 @@
 # Runtime configuration. Secrets do NOT go here; they live in .env.
-# Risk limits are deliberately NOT in this file: they are hardcoded in trader/src/risk/limits.ts.
+# Risk limits are deliberately NOT in this file: they are in trader/src/risk/limits.ts (the dashboard's Limits tab
+# may change them, inside the walls there). Values marked in shared/editable-settings.json can also be changed there.
 # The loader rejects unknown sections, so a `risk:` block here is an error, not a silent no-op.
 
 collector:

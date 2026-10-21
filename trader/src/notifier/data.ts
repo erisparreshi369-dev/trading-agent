@@ -1,9 +1,9 @@
 import type { Config } from "../lib/config.js";
 import type { DB } from "../lib/db.js";
-import { RISK } from "../risk/limits.js";
+import { limitsFor } from "../risk/limits.js";
 import { M } from "./voice.js";
 import {
-  type ActivityFacts, type BuyFacts, type Counted, type Health, type MissedFacts, type PeriodResult, type PnlFacts,
+  type ActivityFacts, type BrainMemoryFacts, type BuyFacts, type Counted, type Health, type MissedFacts, type PeriodResult, type PnlFacts,
   type ReportFacts, type SellFacts, type StatusFacts, type TokenRef, type WhyEvent,
 } from "./messages.js";
 
@@ -166,7 +166,7 @@ export function sellFacts(db: DB, f: FillRow): SellFacts {
   return {
     token: tokenOf(f), costSol: f.cost_sol ?? 0, proceedsSol: f.proceeds_sol ?? f.sol ?? 0, pnlSol: f.pnl_sol ?? 0,
     heldMs: (f.closed_at ?? 0) - (f.opened_at ?? 0), reason: f.exit_reason ?? f.reason, equity: a.equity, start: a.start,
-    stopLossPct: RISK.STOP_LOSS_PCT, maxHoldMs: RISK.TIME_EXIT_MS,
+    stopLossPct: limitsFor("paper", db).STOP_LOSS_PCT, maxHoldMs: limitsFor("paper", db).TIME_EXIT_MS,
   };
 }
 
@@ -248,7 +248,7 @@ export function reportFacts(db: DB, cfg: Config, from: number, to: number, opts:
     trouble,
     verdict: { closedAllTime: all.closed, pnlAllTime: all.pnl, start: a.start, pnlLast7d: period(db, to - 7 * DAY, to).pnl },
     killed: !!risk?.kill_switch,
-    stopLossPct: RISK.STOP_LOSS_PCT,
+    stopLossPct: limitsFor("paper", db).STOP_LOSS_PCT,
   };
 }
 

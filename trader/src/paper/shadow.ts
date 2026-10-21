@@ -87,6 +87,13 @@ export class ShadowBook {
     this.cost = { priorityFeeSol: p.priority_fee_sol, executorFeeBps: p.executor_fee_bps, extraSlippageBps: p.extra_slippage_bps, tokenAccountRentSol: p.token_account_rent_sol };
   }
 
+  /** Rebuild the variants from cfg after the dashboard changed a filter (variants are the live settings plus their own). */
+  reload(): void {
+    if (!this.cfg.shadow.enabled) return;
+    this.variants.splice(0, this.variants.length, ...resolveVariants(this.cfg));
+    this.byName = new Map(this.variants.map((v) => [v.name, v]));
+  }
+
   wantsOnChain(f: Features, mint: string, at: number): boolean {
     return this.variants.some((v) => v.filters && cheapReasons(f, v.filters, this.inCooldown(v, mint, at)).length === 0);
   }

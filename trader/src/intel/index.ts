@@ -2,6 +2,7 @@
 import { env, loadConfig } from "../lib/config.js";
 import { heartbeat, openDb } from "../lib/db.js";
 import { log } from "../lib/log.js";
+import { followOverrides } from "../lib/overrides.js";
 import { runIntel } from "./jobs.js";
 import { MadeOnSol } from "./madeonsol.js";
 
@@ -12,6 +13,7 @@ if (!cfg.madeonsol.enabled || !key) {
   process.exit(0);
 }
 const db = openDb(env.dbPath);
+followOverrides(cfg, db, { everyMs: 0 }); // the owner's limits from the dashboard, once
 const t0 = Date.now();
 const api = new MadeOnSol(db, cfg.madeonsol, key);
 try {

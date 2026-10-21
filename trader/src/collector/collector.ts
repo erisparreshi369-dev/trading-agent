@@ -244,6 +244,7 @@ export class Collector {
     const mb = this.heliusBytesToday / 1e6;
     const open = (db.prepare("SELECT count(*) n FROM paper_positions WHERE status IN ('pending', 'open')").get() as { n: number }).n;
     this.cap = dailyCap(db, cfg.helius, this.now()); // the dashboard may have changed it
+    if (this.targeted) this.targeted.max = cfg.targeted.max_subscriptions; // so may this (lib/overrides.ts)
     this.setMode(modeFor(mb, this.capMb, cfg.helius.steps_pct, open));
     this.warnBudget(mb, open);
     const hour = new Date(this.now()).getUTCHours();

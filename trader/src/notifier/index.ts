@@ -2,6 +2,7 @@ import { resolve } from "node:path";
 import { env, loadConfig, ROOT } from "../lib/config.js";
 import { openDb } from "../lib/db.js";
 import { log } from "../lib/log.js";
+import { followOverrides } from "../lib/overrides.js";
 import { attachAlerts, markStarted, runService } from "../lib/service.js";
 import { Notifier, SERVICE } from "./notifier.js";
 import { solUsd } from "./price.js";
@@ -17,6 +18,7 @@ const cfg = loadConfig();
 setVoice(cfg.notifier.voice); // plain or genz: every message, summary and fallback at once
 const db = openDb(env.dbPath);
 attachAlerts(db, SERVICE);
+followOverrides(cfg, db); // messages quote the limits in force
 const previous = markStarted(db, SERVICE);
 const notifier = new Notifier({
   db, cfg, telegram: new Telegram(token, chatId), killFile: resolve(ROOT, "data/KILL"), reportsDir: resolve(ROOT, "reports"),

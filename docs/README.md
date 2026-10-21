@@ -91,14 +91,17 @@ serial-launcher dev, curve SOL, re-entry cooldown, confirmations from other trac
 remaining balance vs their launch buy. RPC failures reject (fail closed). Every decision is
 stored in `signals` with its reasons and features. Thresholds: `signals:` in `config/config.yaml`.
 
-**Risk manager** (`trader/src/risk/limits.ts`, constants, no setters, not in config; tests
-enforce all of this):
+**Risk manager** (`trader/src/risk/limits.ts`, not in config). The values below are the normal
+ones; since 2026-10-21 the owner can change each on the dashboard's Limits tab (kv
+`override.risk.<NAME>`), for practice and live alike, but only inside `RISK_WALLS` (constants in the
+same file: e.g. at most 0.5 SOL a trade, stop loss 2-50%, time exit 1-30 min, the loss stops and fee
+reserve can't be switched off). A stored value outside its wall is ignored. Tests enforce this.
 
 > **Practice testing (since 2026-10-20): `PAPER_NO_LIMITS = true`.** Paper trading runs with the
 > portfolio limits below lifted (no cap on open positions, entries per day, leader share, size or
 > losses; sizing stays 2% of equity and it can't spend SOL it doesn't have). The stop loss, time
 > exit and manual kill switch stay. Live trading always uses the limits below (`limitsFor("live")`).
-> Back to practising with the real limits: set it to `false`, commit, restart.
+> Switch it on the dashboard's Limits tab ("Practice without limits"), no restart needed.
 
 | limit | value |
 |---|---|
@@ -177,14 +180,18 @@ feed (launches, tracked-wallet trades, every signal with its reasons, paper fill
 restarts), money and equity curve, positions, closed trades, wallets (and why dropped), risk,
 data collection, latency, learner. It opens the database `mode=ro` + `query_only`, never imports
 trader code or reads `.env`, and binds to loopback only (it has no login). Its only write is
-`dashboard/settings.py`: two limits you can change on the page, until you change them back (the
-Helius daily data cap and where the MadeOnSol job stops). `POST /api/settings` accepts only those
-two, with a valid range, and only from the dashboard's own page (Host must be this machine,
+`dashboard/settings.py`: the limits you can change on the page (Limits tab), until you change them
+back. They are listed, with their ranges and pair rules (min below max), in
+`shared/editable-settings.json`, which the bot reads too (`trader/src/lib/overrides.ts` applies
+config ones within ~5 s, re-checking range, pair rules and the config checks; anything that fails
+falls back to `config.yaml`). `POST /api/settings` accepts only those, with a valid range, and only
+from the dashboard's own page (Host must be this machine,
 cross-site Origin refused, a per-start secret token required in a header); each change is saved in
 `kv` (`override.*`) and announced on Telegram. Whatever the daily cap, the collector's monthly
 guard keeps any 31 days under 90% of the plan's monthly credits. One
 poller thread reads SQLite every second and pushes to browsers over Server-Sent Events. Risk limits
-are parsed from `limits.ts`, paper costs from `config.yaml`, so it shows what the trader enforces.
+are parsed from `limits.ts` (plus the owner's changes), paper costs from `config.yaml`, so it shows
+what the trader enforces.
 On a VPS: `ssh -L 8080:localhost:8080 user@host`, then open http://localhost:8080.
 The Phase 4 learner should write `models/current.json`
 (`{"version", "trained_at" (ms), "metrics": {...}, "top_features": [[name, importance], ...]}`);
