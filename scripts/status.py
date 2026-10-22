@@ -14,7 +14,7 @@ DB = Path(os.environ.get("DB_PATH", ROOT / "data/trading.db"))
 if not DB.is_absolute():
     DB = ROOT / DB
 SERVICES = ["collector", "trader", "notifier", "brain"]
-TIMERS = ["score", "weekly", "logrotate", "intel"]
+TIMERS = ["score", "weekly", "logrotate", "intel"]  # the checker runs every 10 min: its line is under paper trading
 STALE_S = 300
 
 G, R, Y, D, B = "\033[32m", "\033[31m", "\033[33m", "\033[2m", "\033[1m"
@@ -214,6 +214,14 @@ def main() -> int:
         top = c.execute("""SELECT reasons, count(*) n FROM signals WHERE decision = 'reject' AND ts > ? GROUP BY reasons ORDER BY n DESC LIMIT 3""", (now - 86_400_000,)).fetchall()
         for r, n in top:
             print(f"  {D}  {n:>4}x {', '.join(json.loads(r))[:90]}{X}")
+    if has_table(c, "mistakes"):
+        n_all, n_24h = q("SELECT count(*), SUM(alerted = 1 AND found_at > ?) FROM mistakes", now - 86_400_000)  # alerted = 0: history from the first run
+        hb = q("SELECT ts FROM service_heartbeats WHERE service = 'checker'")
+        last = f"checked {ago(hb[0])}" if hb else "checker never ran"
+        col = R if n_24h else G
+        print(f"  mistakes   {col}{n_24h or 0} in 24h{X}, {n_all} all time  {D}{last} (make check){X}")
+        for (text,) in c.execute("SELECT text FROM mistakes ORDER BY id DESC LIMIT 3"):
+            print(f"  {D}  {text[:110]}{X}")
     return 0 if ok else 2
 
 

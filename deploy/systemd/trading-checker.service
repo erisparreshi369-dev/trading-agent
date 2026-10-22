@@ -1,0 +1,11 @@
+[Unit]
+Description=trading-agent mistake checker (did the paper trader break its own rules?)
+OnFailure=trading-failure@%N.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=@ROOT@/trader
+ExecStart=@NODE@ dist/checker/index.js
+StandardOutput=append:@ROOT@/logs/checker.log
+StandardError=append:@ROOT@/logs/checker.log
+TimeoutStartSec=5min

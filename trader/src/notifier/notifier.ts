@@ -282,6 +282,9 @@ export class Notifier {
             skipped: data.skipped == null ? null : Number(data.skipped),
           }));
           break;
+        case "mistake":
+          ok = await this.say(M.mistake(c, { n: Number(data.n ?? 1), first: String(data.first ?? "broke one of its own rules") }), { urgent: true });
+          break;
         case "startup_blocked":
           ok = await this.say(M.startupBlocked(c, String(data.why ?? "")), { urgent: true });
           break;

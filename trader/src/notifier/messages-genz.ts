@@ -17,7 +17,7 @@
  */
 import { clock, dayName, duration, plural, size, sol, times, token, TRADES_TO_JUDGE, type ActivityFacts, type BrainFacts, type BrainMemoryFacts, type BuyFacts, type Counted, type Ctx,
   type Explained, type MissedFacts, type PnlFacts, type ReportFacts, type SellFacts, type SkipFacts, type StatusFacts, type TokenRef, type Verdict,
-  type WhyEvent, type PeriodResult, type SettingChange, type SizeStepFacts, KEEPS_RESTARTING } from "./messages.js";
+  type WhyEvent, type PeriodResult, type SettingChange, type SizeStepFacts, type MistakeFacts, KEEPS_RESTARTING } from "./messages.js";
 
 // everything else (types, number helpers, isScamSkip, STOP_YES/NO, ...) is shared with plain
 export * from "./messages.js";
@@ -202,6 +202,8 @@ export function explainExit(reason: string | null, _stopLossPct = 0.25, maxHoldM
       return "our trader sold, so we sold too";
     case "stop_loss":
       return "the price tanked, so our auto-sell to stop a big L kicked in";
+    case "trailing_stop":
+      return "it dropped 20% off its peak since we bought, so we dipped";
     case "time_exit":
       return `we held it for ${duration(maxHoldMs)}, our max`;
     case "kill_switch":
@@ -392,6 +394,7 @@ export function jobFailed(c: Ctx, job: string): string {
     weekly: { name: "the weekly report", effect: "trading is fine. only the report is missing.", step: onComputer("make weekly", "makes the report again") },
     intel: { name: "the nightly MadeOnSol helper job", effect: "trading is fine. we just keep yesterday's creator records.", step: onComputer("make logs S=intel", "shows what went wrong") },
     brain: { name: "the learning brain", effect: "trading is fine. the bot keeps using what the brain learned last, it just stops learning.", step: onComputer("make restart", "starts it again") },
+    checker: { name: "the mistake checker", effect: "trading is fine. if the bot messes up rn, nobody notices until it runs again.", step: onComputer("make logs S=checker", "shows what went wrong") },
     logrotate: { name: "the log cleaner", effect: "old log files didn't get cleaned. if it keeps happening the disk slowly fills up.", step: onComputer("df -h", "shows how full the disk is") },
   };
   const w = what[job] ?? { name: "a planned job", effect: "trading isn't directly affected.", step: onComputer("make status", "shows what's running") };
@@ -636,6 +639,16 @@ export function dailyLossCap(c: Ctx, equity: number, dayStart: number): string {
   });
 }
 
+export function mistake(c: Ctx, f: MistakeFacts): string {
+  return render({
+    title: "BOT MISTAKE · The bot broke one of its own rules",
+    happened: f.n === 1 ? `the bot ${f.first}.` : `the bot broke its own rules ${f.n} times. first one: it ${f.first}.`,
+    mood: "bad",
+    why: "that's a bug, not bad luck. it's practice money, but the same bug would cost real money too.",
+    todo: onComputer("make app", "opens the dashboard. the red card on home says which trade and what went wrong"),
+  });
+}
+
 export function startupBlocked(c: Ctx, why: string): string {
   if (why === "helius_key_missing") {
     return render({
@@ -768,6 +781,7 @@ const EXPLAINERS: Explainer[] = [
   { match: /DATA HELPER/, simple: () => "MadeOnSol is an extra helper that tells us how a coin's creator did before. we get a few free asks a day.", example: "like a free library card: a few books a day, then you come back tomorrow." },
   { match: /DATA ·/, simple: () => "this is about the market info the bot reads to trade.", example: "like a weather app with no internet: it can't show the weather." },
   { match: /EMERGENCY STOP/, simple: () => "all trading is stopped. the bot sold everything and buys nothing new.", example: "like hitting the big red button." },
+  { match: /BOT MISTAKE/, simple: () => "a checker looks at every trade every 10 min. this means the bot didn't follow one of its own rules, like selling at the stop loss.", example: "like VAR: the replay catches the foul the players missed." },
   { match: /TRADE SIZE/, simple: () => "how big each trade is. it only grows after a few green weeks in a row, and shrinks again if the next week's red.", example: "like ranked: you move up a tier after a win streak, not after one lucky game." },
   { match: /SAFETY LIMIT/, simple: () => "we lost too much today, so the bot takes a break till tomorrow.", example: "like a rule: lose 5 games today, you're done till tomorrow." },
   { match: /^STATUS/, simple: () => "a check of every part of the bot: working or not?", example: "like checking all the lights in the house are on." },
@@ -980,7 +994,7 @@ export function verdict(v: Verdict): string {
 }
 
 const exitLabel = (r: string) =>
-  ({ leader_exit: "our trader sold", stop_loss: "auto-sell to stop a big L", time_exit: "held for our max time", kill_switch: "emergency stop" })[r] ?? "other";
+  ({ leader_exit: "our trader sold", stop_loss: "auto-sell to stop a big L", trailing_stop: "dropped 20% off its peak", time_exit: "held for our max time", kill_switch: "emergency stop" })[r] ?? "other";
 
 function reportDetails(c: Ctx, r: ReportFacts): Line[] {
   const p = r.period;

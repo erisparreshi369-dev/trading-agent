@@ -46,7 +46,7 @@ const GZ = {
 
   // why we sold
   exit(r) {
-    return { leader_exit: "our trader sold, so we did", stop_loss: "price tanked, auto-sold to stop a big L", time_exit: "held 30m, our max",
+    return { leader_exit: "our trader sold, so we did", stop_loss: "price tanked, auto-sold to stop a big L", trailing_stop: "dropped 20% off its peak, so we dipped", time_exit: "held 30m, our max",
       kill_switch: "the emergency stop sold it" }[r] || r || "one of our selling rules";
   },
 
@@ -130,7 +130,7 @@ const PLAIN = {
   },
 
   exit(r) {
-    return { leader_exit: "the trader we copy sold, so we sold", stop_loss: "the price fell too far, so it sold automatically",
+    return { leader_exit: "the trader we copy sold, so we sold", stop_loss: "the price fell too far, so it sold automatically", trailing_stop: "the price fell 20% from its best, so it sold",
       time_exit: "held for the 30-minute maximum", kill_switch: "the emergency stop sold it" }[r] || r || "one of our selling rules";
   },
 

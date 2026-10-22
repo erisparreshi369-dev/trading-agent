@@ -320,6 +320,8 @@ export function explainExit(reason: string | null, _stopLossPct = 0.25, maxHoldM
       return "the trader we copy sold";
     case "stop_loss":
       return "the price fell a lot, so our automatic sell to stop a big loss sold it";
+    case "trailing_stop":
+      return "the price fell 20% below its highest point since we bought";
     case "time_exit":
       return `we held it for ${duration(maxHoldMs)}, our longest time`;
     case "kill_switch":
@@ -577,6 +579,7 @@ export function jobFailed(c: Ctx, job: string): string {
     weekly: { name: "The weekly report", effect: "Trading is not affected. Only the report is missing.", step: onComputer("make weekly", "this makes the report again") },
     intel: { name: "The nightly MadeOnSol helper job", effect: "Trading is not affected. We just keep yesterday's creator records.", step: onComputer("make logs S=intel", "this shows what went wrong") },
     brain: { name: "The learning brain", effect: "Trading is not affected. The bot keeps using what the brain learned last, but it stops learning.", step: onComputer("make restart", "this starts it again") },
+    checker: { name: "The mistake checker", effect: "Trading is not affected. Mistakes the bot makes now go unnoticed until it runs again.", step: onComputer("make logs S=checker", "this shows what went wrong") },
     logrotate: { name: "The log cleaner", effect: "Old log files were not cleaned. If this keeps happening, the disk slowly fills up.", step: onComputer("df -h", "this shows how full the disk is") },
   };
   const w = what[job] ?? { name: "A planned job", effect: "Trading is not directly affected.", step: onComputer("make status", "this shows what is running") };
@@ -860,6 +863,22 @@ export function sizeStep(c: Ctx, f: SizeStepFacts): string {
     });
 }
 
+export interface MistakeFacts {
+  n: number;
+  /** The first one, as a verb phrase: "didn't sell at the stop loss" (checker/checks.ts KINDS). */
+  first: string;
+}
+
+export function mistake(c: Ctx, f: MistakeFacts): string {
+  return render({
+    title: "BOT MISTAKE · The bot broke one of its own rules",
+    happened: f.n === 1 ? `The bot ${f.first}.` : `The bot broke its own rules ${f.n} times. The first one: it ${f.first}.`,
+    mood: "bad",
+    why: "This is a bug, not bad luck. It is practice money, but the same bug would cost real money too.",
+    todo: onComputer("make app", "this opens the dashboard. The red card on the home tab says which trade and what went wrong"),
+  });
+}
+
 export function startupBlocked(c: Ctx, why: string): string {
   if (why === "helius_key_missing") {
     return render({
@@ -1011,6 +1030,8 @@ const EXPLAINERS: Explainer[] = [
     example: "Like a free library card: a few books a day. When they are used up, you come back tomorrow." },
   { match: /EMERGENCY STOP/, simple: () => "All trading is stopped. The bot sold everything and buys nothing new.",
     example: "Like pressing the big red stop button on a machine." },
+  { match: /BOT MISTAKE/, simple: () => "A checker looks at every trade every 10 minutes. This means the bot did not follow one of its own rules, like selling at the stop loss.",
+    example: "Like a referee who watches the replay and spots a foul the players missed." },
   { match: /TRADE SIZE/, simple: () => "How big each trade is. It only grows after several good weeks in a row, and shrinks again if the next week is bad.",
     example: "Like a new driver: you get the faster car only after months without a crash." },
   { match: /SAFETY LIMIT/, simple: () => "We lost too much today, so the bot rests until tomorrow.",
@@ -1330,7 +1351,7 @@ export interface ReportFacts {
 }
 
 const exitLabel = (r: string) =>
-  ({ leader_exit: "the trader we copy sold", stop_loss: "automatic sell to stop a big loss", time_exit: "held for our longest time", kill_switch: "emergency stop" })[r] ?? "other";
+  ({ leader_exit: "the trader we copy sold", stop_loss: "automatic sell to stop a big loss", trailing_stop: "fell 20% from its best", time_exit: "held for our longest time", kill_switch: "emergency stop" })[r] ?? "other";
 
 function reportDetails(c: Ctx, r: ReportFacts): Line[] {
   const p = r.period;

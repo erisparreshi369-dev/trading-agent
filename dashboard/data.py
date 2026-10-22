@@ -226,6 +226,20 @@ class Snapshot:
             "madeonsol": self.cached("madeonsol", 10, lambda: self.madeonsol(now, info.get("intel"), heartbeats.get("intel"), svc, st)),
             "settings": st,
             "settings_meta": settings.meta(),
+            "mistakes": self.mistakes(now, heartbeats.get("checker")),
+        }
+
+    # ---- what the mistake checker found (trader/src/checker): rules the trader broke
+    def mistakes(self, now: int, hb) -> dict | None:
+        if not self.has("mistakes"):
+            return None
+        rows = self.q("SELECT found_at, kind, text, alerted FROM mistakes ORDER BY id DESC LIMIT 8")
+        return {
+            "checked_at": hb["ts"] if hb else None,
+            # alerted = 0 rows are history from the checker's first run, not new mistakes
+            "day": self.one("SELECT count(*) FROM mistakes WHERE alerted = 1 AND found_at > ?", now - 86_400_000),
+            "total": self.one("SELECT count(*) FROM mistakes"),
+            "recent": [dict(r) for r in rows],
         }
 
     # ---- 1. services

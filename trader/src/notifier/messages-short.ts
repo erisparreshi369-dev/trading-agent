@@ -52,7 +52,7 @@ function oneLine(long: Messages, text: string): string {
 
 /** Messages the bot sends by itself that become "<emoji> <title>". */
 const ALERTS = ["partDown", "partFrozen", "partSwitchedOff", "partBack", "restarted", "manyErrors", "jobFailed", "dataCapReached", "dataBudget",
-  "settingChanged", "helperBudget", "brainChanged", "dataStopped", "dataBack", "killSwitch", "dailyLossCap", "sizeStep", "startupBlocked", "hello", "quietOver"] as const;
+  "settingChanged", "helperBudget", "brainChanged", "dataStopped", "dataBack", "killSwitch", "dailyLossCap", "sizeStep", "mistake", "startupBlocked", "hello", "quietOver"] as const;
 
 /** Short titles back to the full ones, so /explain still recognises a short message. */
 const EXPLAIN_AS: [RegExp, string][] = [

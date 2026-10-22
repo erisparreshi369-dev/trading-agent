@@ -1,7 +1,7 @@
 SHELL := /bin/bash
 PY := .venv/bin/python
 
-.PHONY: install build test migrate collector trader notifier dashboard app install-app brain youtube veteran journal intel score weekly status health logs kill unkill verify-live explain costs install-services uninstall-services restart deploy drill
+.PHONY: install build test migrate collector trader notifier dashboard app install-app brain youtube veteran journal intel score check weekly status health logs kill unkill verify-live explain costs install-services uninstall-services restart deploy drill
 
 install: ## install all dependencies
 	cd trader && npm ci
@@ -43,6 +43,9 @@ install-app: ## add "Trading Dashboard" to the app menu and the desktop
 intel: build ## MadeOnSol daily job now: creator records, early-buyer scores, candidate wallets (systemd runs it 00:02 UTC)
 	cd trader && node dist/intel/index.js
 
+check: build ## mistake checker now: did the paper trader break its own rules? (systemd runs it every 10 min)
+	cd trader && node dist/checker/index.js
+
 score: build ## re-score wallets and update the tracked set (systemd runs it daily at 00:15 UTC)
 	cd trader && node dist/scoring/index.js
 
@@ -73,7 +76,7 @@ restart: ## (re)start the collector, trader, notifier and learning brain, includ
 uninstall-services:
 	bash scripts/install-services.sh --uninstall
 
-logs: ## make logs S=trader  (collector|trader|notifier|dashboard|score|weekly|intel|brain|youtube)
+logs: ## make logs S=trader  (collector|trader|notifier|dashboard|score|weekly|intel|brain|youtube|checker)
 	tail -n 200 -F logs/$(or $(S),trader).log | (cd trader && npx pino-pretty)
 
 health: ## one line, exit code 0/2: for scripts and cron

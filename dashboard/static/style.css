@@ -281,6 +281,12 @@ button { font: inherit; }
 .kv dt { color: var(--muted); }
 .kv dd { margin: 0; }
 .warnbox { background: var(--sun-soft); border: 1px solid var(--sun-line); color: var(--ink); padding: 7px 10px; border-radius: 10px; font-weight: 500; font-size: 12.5px; margin-bottom: 8px; }
+#mistakes { margin-top: 10px; }
+.mistakes-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.mistakes { list-style: none; margin: 6px 0 0; padding: 0; font-size: 12px; max-height: 140px; overflow-y: auto; }
+.mistakes li { padding: 4px 8px; border-radius: 6px; margin-top: 4px; background: var(--grape-soft); color: var(--ink-2); }
+.mistakes li.bad { background: var(--l-soft); color: var(--l); font-weight: 600; }
+.mistakes em { font-style: normal; font-weight: 400; opacity: .75; margin-right: 6px; }
 .flag-inline { color: var(--sun-ink); font-weight: 600; }
 .empty { color: var(--muted); padding: 6px 0; }
 

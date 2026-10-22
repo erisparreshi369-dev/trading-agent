@@ -100,6 +100,7 @@ function render(s) {
   renderAway(s);
   renderServices(s.services);
   renderOkData(s.data);
+  renderMistakes(s.mistakes);
   renderMoney(s.money);
   renderPositions(s.positions);
   renderClosed(s.closed);
@@ -468,6 +469,17 @@ function renderOkData(d) {
     + `<div class="muted" style="font-size:12px">${left}</div>`;
 }
 
+function renderMistakes(m) {
+  if (!m) { $("mistakes").innerHTML = ""; return; }
+  const checked = m.checked_at ? `${g("checked", "checked")} ${agoSpan(m.checked_at)}` : g("hasn't run yet", "hasn't run yet");
+  const head = m.day
+    ? `<span class="pill bad">${g(`${m.day} broken rule${m.day === 1 ? "" : "s"} in 24h`, `${m.day} fumble${m.day === 1 ? "" : "s"} in 24h`)}</span>`
+    : `<span class="pill ok">${g("no broken rules in 24h", "no fumbles in 24h")}</span>`;
+  const list = m.recent.map((r) => `<li class="${r.alerted ? "bad" : ""}"><em>${r.alerted ? agoSpan(r.found_at) : g("older trade", "older trade")}</em>${esc(r.text)}</li>`).join("");
+  $("mistakes").innerHTML = `<div class="mistakes-head">${head}<small class="muted">${g("mistake checker", "mistake checker")} · ${checked}</small></div>`
+    + (list ? `<ul class="mistakes">${list}</ul>` : "");
+}
+
 function kpi(label, value, sub = "", klass = "", hero = false) {
   return `<div class="kpi${hero ? " hero" : ""}"><div class="l">${label}</div><div class="v num ${klass}">${value}</div><div class="s">${sub}</div></div>`;
 }
@@ -526,7 +538,7 @@ function renderPositions(ps) {
 function renderClosed(rows) {
   const why = (r) => (r.status === "failed" ? `${g("didn't go through", "didn't go through")}: ${words().missed(r.exit_reason)}` : words().exit(r.exit_reason));
   const whyShort = (r) => (r.status === "failed" ? g("didn't go through", "missed") : ({
-    leader_exit: g("trader sold", "trader dipped"), stop_loss: g("auto-sold", "auto-sold"), time_exit: g("30-min limit", "30 min max"), kill_switch: g("emergency stop", "emergency stop"),
+    leader_exit: g("trader sold", "trader dipped"), stop_loss: g("auto-sold", "auto-sold"), trailing_stop: g("fell from its best", "dropped off peak"), time_exit: g("30-min limit", "30 min max"), kill_switch: g("emergency stop", "emergency stop"),
   })[r.exit_reason] || why(r));
   // home: the short story of each trade
   $("closed").innerHTML = table(

@@ -132,6 +132,8 @@ const PaperSchema = z
     max_slippage_bps: z.number().positive(),
     token_account_rent_sol: z.number().nonnegative(),
     follow_leader_exit: z.boolean(),
+    // sell once the price is this many % below the highest price since our buy; null = off
+    trailing_stop_pct: z.number().positive().max(100).nullable().default(null),
   })
   .strict();
 

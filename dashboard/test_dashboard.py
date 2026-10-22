@@ -124,6 +124,18 @@ class DashboardData(unittest.TestCase):
         self.assertEqual(m["last_error_at"], NOW - 30_000)
         self.assertEqual(m["last_error"], "me: http 500 msk_***")
 
+    def test_mistakes_card(self):
+        m = data.Snapshot(self.c, self.path).build({}, NOW)["mistakes"]
+        self.assertEqual((m["checked_at"], m["day"], m["total"], m["recent"]), (None, 0, 0, []))
+        w = connect(str(self.path))
+        w.execute("INSERT INTO mistakes (key, found_at, position_id, kind, text, alerted) VALUES ('missed_stop:2', ?, 2, 'missed_stop', 'old', 0)", (NOW - 60_000,))
+        w.execute("INSERT INTO mistakes (key, found_at, position_id, kind, text, alerted) VALUES ('held_too_long:3', ?, 3, 'held_too_long', 'new', 1)", (NOW - 30_000,))
+        w.execute("INSERT INTO service_heartbeats VALUES ('checker', ?, 1, '{}')", (NOW - 10_000,))
+        w.close()
+        m = data.Snapshot(self.c, self.path).build({}, NOW)["mistakes"]
+        self.assertEqual((m["checked_at"], m["day"], m["total"]), (NOW - 10_000, 1, 2))  # history from the first run isn't "new"
+        self.assertEqual([r["text"] for r in m["recent"]], ["new", "old"])
+
     def test_youtube_verdicts(self):
         self.assertEqual(data.Snapshot(self.c, self.path).build({}, NOW)["learner"]["youtube"]["rules"], [])  # nothing studied yet
         w = connect(str(self.path))

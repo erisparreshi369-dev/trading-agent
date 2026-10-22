@@ -7,7 +7,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 UNIT_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
 NODE="$(command -v node)"
 SERVICES=(collector trader notifier brain)
-TIMERS=(score weekly logrotate intel youtube backup)
+TIMERS=(score weekly logrotate intel youtube backup checker)
 # the brain studied nightly before it learned after every trade; the dashboard runs only inside the desktop app since 2026-10-21
 RETIRED=(trading-brain.timer trading-dashboard.service)
 
