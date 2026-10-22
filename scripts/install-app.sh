@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Adds a "Trading Dashboard" launcher (its own window, not a browser) to the app menu and the desktop.
+# Adds a "Trading Dashboard" launcher (its own window, not a browser) to the app menu and the desktop, and opens it at login.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 APPS="$HOME/.local/share/applications"
@@ -27,4 +27,7 @@ if [ -d "$DESK" ]; then
   gio set "$DESK/trading-dashboard.desktop" metadata::xfce-exe-checksum "$(sha256sum "$DESK/trading-dashboard.desktop" | cut -d' ' -f1)" 2>/dev/null || true
 fi
 update-desktop-database "$APPS" 2>/dev/null || true
-echo "Added: app menu → Trading Dashboard${DESK:+, and an icon on the desktop}"
+# Open it at login too, so the live feed is always on screen (closing the window still stops it).
+mkdir -p "$HOME/.config/autostart"
+cp "$FILE" "$HOME/.config/autostart/trading-dashboard.desktop"
+echo "Added: app menu → Trading Dashboard${DESK:+, an icon on the desktop}, and it opens at login"
