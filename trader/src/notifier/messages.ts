@@ -288,6 +288,8 @@ const SKIP_RULES: Rule[] = [
   [/^on-chain check failed/, () => same("check_failed", "our safety check got no answer, so we stayed out to be safe")],
   [/^score (-?[\d.]+) < (-?[\d.]+)/, () => same("low_score", "the trader we copy has not done well enough lately")],
   [/^model expects/, () => same("model", "our learning system expected this trade to lose money")],
+  [/^bad creator/, () => same("bad_creator", "almost none of the creator's earlier coins took off")],
+  [/^creator rated/, () => same("creator_tier", "the creator's earlier coins mostly went nowhere")],
   // safety limits (we wanted to copy, then a limit said no)
   [/^risk: kill switch/, () => same("risk_killed", "the emergency stop is on")],
   [/^risk: daily loss cap/, () => same("risk_daily_loss", "we reached today's loss limit")],

@@ -176,6 +176,7 @@ const SKIP_RULES: Rule[] = [
   [/^score (-?[\d.]+) < (-?[\d.]+)/, () => same("low_score", "our trader hasn't been doing great lately")],
   [/^model expects/, () => same("model", "our learning system thinks this one would lose money")],
   [/^bad creator/, () => same("bad_creator", "the creator's past coins basically all flopped")],
+  [/^creator rated/, () => same("creator_tier", "the creator's past coins mostly went nowhere")],
   [/^risk: kill switch/, () => same("risk_killed", "the emergency stop is on")],
   [/^risk: daily loss cap/, () => same("risk_daily_loss", "we hit today's loss limit")],
   [/^risk: max open positions \((\d+)\)/, (m) => same("risk_open", `we already had ${m[1]} trades open, our max`)],

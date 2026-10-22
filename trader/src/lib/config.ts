@@ -96,6 +96,8 @@ const SignalsSchema = z
     exclude_bad_creators: z.boolean(),
     bad_creator_min_launches: z.number().int().positive(),
     bad_creator_max_success: z.number().min(0).max(1),
+    // skip a coin whose creator MadeOnSol rated one of these tiers (stored before the decision), e.g. [cold]
+    skip_creator_tiers: z.array(z.string()).default([]),
     use_brain: z.boolean(), // skip what the learning brain predicts will lose, once it passed its exam (it can only skip, never add trades)
     // veteran habits (null / 0 = off)
     max_curve_sol_per_min: z.number().positive().nullable(), // don't chase: skip a curve that filled faster than this since launch

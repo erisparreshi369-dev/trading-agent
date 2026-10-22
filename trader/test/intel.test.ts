@@ -227,11 +227,12 @@ describe("creator check: decisions read only our database, only data fetched bef
   it("uses a creator record fetched before the decision, never one fetched after", () => {
     const db = memDb();
     const dev = key(), mint = key();
-    db.prepare("INSERT INTO creator_reputation (creator, fetched_at, total_deployed, total_bonded) VALUES (?, ?, 558, 0), (?, ?, 600, 3)").run(dev, NOW, dev, NOW + 3_600_000);
+    db.prepare("INSERT INTO creator_reputation (creator, fetched_at, total_deployed, total_bonded, tier) VALUES (?, ?, 558, 0, 'cold'), (?, ?, 600, 3, 'rising')").run(dev, NOW, dev, NOW + 3_600_000);
     db.prepare("INSERT INTO token_intel (mint, fetched_at, early_buyer_score) VALUES (?, ?, 12)").run(mint, NOW + 60_000); // known only after the decision
-    expect(engineAt(db, NOW - 1).storedIntel(mint, dev)).toEqual({ creator_launches: null, creator_success_rate: null, creator_record_age_h: null, early_buyer_score: null, intel_source: null });
+    expect(engineAt(db, NOW - 1).storedIntel(mint, dev))
+      .toEqual({ creator_launches: null, creator_success_rate: null, creator_record_age_h: null, creator_tier: null, early_buyer_score: null, intel_source: null });
     expect(engineAt(db, NOW + 1_800_000).storedIntel(mint, dev))
-      .toEqual({ creator_launches: 558, creator_success_rate: 0, creator_record_age_h: 0.5, early_buyer_score: 12, intel_source: "madeonsol" });
+      .toEqual({ creator_launches: 558, creator_success_rate: 0, creator_record_age_h: 0.5, creator_tier: "cold", early_buyer_score: 12, intel_source: "madeonsol" });
   });
 
   it("is off for practice trades; the creator_check shadow variant turns it on", () => {
@@ -242,5 +243,14 @@ describe("creator check: decisions read only our database, only data fetched bef
     expect(cheapReasons(f, variant, false)).toEqual(["bad creator: 558 launches, 0% filled their curve"]);
     expect(cheapReasons({ ...f, creator_launches: 3 }, variant, false)).toEqual([]); // too few launches to judge
     expect(cheapReasons({ ...f, creator_launches: null, creator_success_rate: null }, variant, false)).toEqual([]); // unknown creator passes
+  });
+
+  it("the skip_cold variant skips coins whose creator was rated cold before the buy; live doesn't", () => {
+    const f: Features = { venue: "curve", leader_buy_sol: 1, token_known: true, token_age_s: 30, liquidity_sol: 5, confirmations: 1, creator_tier: "cold" };
+    expect(cheapReasons(f, cfg.signals, false)).toEqual([]);
+    const variant = { ...cfg.signals, ...cfg.shadow.variants.skip_cold!.filters as object };
+    expect(cheapReasons(f, variant, false)).toEqual(["creator rated cold by MadeOnSol"]);
+    expect(cheapReasons({ ...f, creator_tier: "unranked" }, variant, false)).toEqual([]);
+    expect(cheapReasons({ ...f, creator_tier: null }, variant, false)).toEqual([]); // unknown creator passes
   });
 });

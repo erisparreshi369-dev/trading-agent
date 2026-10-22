@@ -66,6 +66,7 @@ export function cheapReasons(f: Features, c: SignalsConfig, inCooldown: boolean,
     && (f.creator_success_rate as number) <= c.bad_creator_max_success) {
     reasons.push(`bad creator: ${launches} launches, ${Math.round((f.creator_success_rate as number) * 100)}% filled their curve`);
   }
+  if (typeof f.creator_tier === "string" && c.skip_creator_tiers.includes(f.creator_tier)) reasons.push(`creator rated ${f.creator_tier} by MadeOnSol`);
   return reasons;
 }
 

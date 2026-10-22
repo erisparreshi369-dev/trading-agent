@@ -99,6 +99,7 @@ signals:
   exclude_bad_creators: false
   bad_creator_min_launches: 10  # a creator with at least this many launches...
   bad_creator_max_success: 0.01 # ...of which at most this share filled their curve, is "bad"
+  skip_creator_tiers: []        # skip coins whose creator MadeOnSol rated one of these tiers (cold, unranked, rising, moderate, good); the skip_cold variant tests [cold]
   # The learning brain: once its newest model passed the exam (brain: below), skip signals it
   # predicts will lose. It can only make the bot pickier. Its exam and its own-skips record judge it.
   use_brain: true
@@ -148,7 +149,8 @@ shadow:
     tp_100: { exit: { take_profit_pct: 100 } }
     trail_20: { exit: { leader_exit: false, trailing_stop_pct: 20 } }
     trail_35: { exit: { leader_exit: false, trailing_stop_pct: 35 } }
-    follow_leader: { exit: { leader_exit: true, trailing_stop_pct: null } }   # the exits before 2026-10-22: sell when the leader sells
+    follow_leader: { exit: { leader_exit: true, trailing_stop_pct: null } }
+    skip_cold: { filters: { skip_creator_tiers: [cold] } }   # MadeOnSol "Deployer Hunter" tier known before the buy; 2026-10-22 data: cold -6.3% vs unranked +7.2% (all_signals)   # the exits before 2026-10-22: sell when the leader sells
     hold_1m: { exit: { leader_exit: false, max_hold_s: 60 } }
     hold_5m: { exit: { leader_exit: false, max_hold_s: 300 } }
     buy_0.05: { filters: { min_leader_buy_sol: 0.05 } }

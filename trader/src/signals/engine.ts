@@ -66,8 +66,8 @@ export class SignalEngine {
   private storedIntel(mint: string, creator: string | null): Features {
     const now = this.now();
     const rep = creator
-      ? this.db.prepare(`SELECT total_deployed, total_bonded, fetched_at FROM creator_reputation WHERE creator = ? AND fetched_at <= ?
-          ORDER BY fetched_at DESC LIMIT 1`).get(creator, now) as { total_deployed: number | null; total_bonded: number | null; fetched_at: number } | undefined
+      ? this.db.prepare(`SELECT total_deployed, total_bonded, tier, fetched_at FROM creator_reputation WHERE creator = ? AND fetched_at <= ?
+          ORDER BY fetched_at DESC LIMIT 1`).get(creator, now) as { total_deployed: number | null; total_bonded: number | null; tier: string | null; fetched_at: number } | undefined
       : undefined;
     const ebs = this.db.prepare(`SELECT early_buyer_score FROM token_intel WHERE mint = ? AND fetched_at <= ? AND early_buyer_score IS NOT NULL
       ORDER BY fetched_at DESC LIMIT 1`).get(mint, now) as { early_buyer_score: number } | undefined;
@@ -76,6 +76,7 @@ export class SignalEngine {
       creator_launches: launches,
       creator_success_rate: launches ? +((rep!.total_bonded ?? 0) / launches).toFixed(4) : null,
       creator_record_age_h: rep ? +((now - rep.fetched_at) / 3_600_000).toFixed(1) : null,
+      creator_tier: rep?.tier ?? null,
       early_buyer_score: ebs?.early_buyer_score ?? null,
       intel_source: rep || ebs ? "madeonsol" : null,
     };
