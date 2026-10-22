@@ -1,7 +1,7 @@
 SHELL := /bin/bash
 PY := .venv/bin/python
 
-.PHONY: install build test migrate collector trader notifier dashboard app install-app brain youtube veteran journal intel score check weekly status health logs kill unkill verify-live explain costs install-services uninstall-services restart deploy drill
+.PHONY: install build test migrate collector trader notifier dashboard app install-app brain youtube veteran journal intel score check block unblock weekly status health logs kill unkill verify-live explain costs install-services uninstall-services restart deploy drill
 
 install: ## install all dependencies
 	cd trader && npm ci
@@ -45,6 +45,14 @@ intel: build ## MadeOnSol daily job now: creator records, early-buyer scores, ca
 
 check: build ## mistake checker now: did the paper trader break its own rules? (systemd runs it every 10 min)
 	cd trader && node dist/checker/index.js
+
+block: ## stop following a wallet for good: make block WALLET=<address> (the nightly scoring never picks it again)
+	@test -n "$(WALLET)" || { echo "usage: make block WALLET=<address>"; exit 1; }
+	@$(PY) -c "import sqlite3,sys,time; c=sqlite3.connect('data/trading.db', timeout=10); n=c.execute(\"UPDATE tracked_wallets SET active = 0, source = 'blocked', deactivated_at = ?, deactivated_reason = 'blocked by the owner' WHERE wallet = ?\", (int(time.time()*1000), sys.argv[1])).rowcount; c.commit(); print('blocked' if n else 'not a wallet the bot knows')" "$(WALLET)"
+
+unblock: ## let the nightly scoring pick a blocked wallet again: make unblock WALLET=<address>
+	@test -n "$(WALLET)" || { echo "usage: make unblock WALLET=<address>"; exit 1; }
+	@$(PY) -c "import sqlite3,sys; c=sqlite3.connect('data/trading.db', timeout=10); n=c.execute(\"UPDATE tracked_wallets SET source = 'scoring', deactivated_reason = 'unblocked by the owner' WHERE wallet = ? AND source = 'blocked'\", (sys.argv[1],)).rowcount; c.commit(); print('unblocked: the next scoring may pick it again' if n else 'that wallet is not blocked')" "$(WALLET)"
 
 score: build ## re-score wallets and update the tracked set (systemd runs it daily at 00:15 UTC)
 	cd trader && node dist/scoring/index.js

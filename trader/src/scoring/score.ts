@@ -278,7 +278,9 @@ export function applyScores(db: DB, scores: WalletScore[], cfg: ScoringConfig, n
     avg_buy_sol, snipe_frac, snipe_pnl_frac, copy_trades, copy_missed, copy_pnl_sol, copy_roi, copy_win_rate, last_trade_at, score, eligible, reject_reason)
     VALUES (@run_at, @wallet, @tokens_traded, @closed_positions, @realized_pnl_sol, @win_rate, @median_hold_s, @avg_buy_sol, @snipe_frac,
     @snipe_pnl_frac, @copy_trades, @copy_missed, @copy_pnl_sol, @copy_roi, @copy_win_rate, @last_trade_at, @score, @eligible, @reject_reason)`);
-  const top = scores.filter((s) => s.eligible).slice(0, cfg.track_top_n);
+  // wallets the owner blocked (make block) are never followed again, however well they score
+  const blocked = new Set((db.prepare("SELECT wallet FROM tracked_wallets WHERE source = 'blocked'").all() as { wallet: string }[]).map((r) => r.wallet));
+  const top = scores.filter((s) => s.eligible && !blocked.has(s.wallet)).slice(0, cfg.track_top_n);
   const topSet = new Set(top.map((s) => s.wallet));
   const byWallet = new Map(scores.map((s) => [s.wallet, s]));
   const added: string[] = [], kept: string[] = [], removed: { wallet: string; reason: string }[] = [];

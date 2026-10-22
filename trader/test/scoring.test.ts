@@ -129,6 +129,15 @@ describe("wallet scoring", () => {
     expect(db.prepare("SELECT count(*) n FROM wallet_scores WHERE eligible = 1").get()).toEqual({ n: 1 });
   });
 
+  it("never picks a wallet the owner blocked, however well it scores", () => {
+    const db = memDb();
+    const m = market(db);
+    db.prepare("INSERT INTO tracked_wallets (wallet, added_at, active, source) VALUES (?, 0, 0, 'blocked')").run(m.good);
+    const res = applyScores(db, scoreWallets(db, cfg.scoring, cfg.paper, m.now), cfg.scoring, m.now);
+    expect(res.added).toEqual([]);
+    expect(db.prepare("SELECT active, source FROM tracked_wallets WHERE wallet = ?").get(m.good)).toEqual({ active: 0, source: "blocked" });
+  });
+
   it("needs scoring.min_copy_trades simulated follower trades before a wallet can be followed", () => {
     const db = memDb();
     const m = market(db);
