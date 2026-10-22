@@ -32,6 +32,8 @@ HABITS = {
     "tjr_partial": "TJR: up 25%, sell half; the rest can't turn into a loss",
     "tjr_hours": "TJR: only trade 13:00-21:00 UTC",
     "tjr": "TJR: all three together",
+    # "DAY TRADING Explained in 11 Minutes"
+    "rr_plan": "fixed plan: stop -7%, sell half at +24%, the rest at +50%",
 }
 HOURS_VARIANT = "all_signals"  # what following every signal did, by hour: the most trades to look at
 SETTLED = ("closed", "filtered", "missed")

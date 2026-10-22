@@ -171,6 +171,9 @@ shadow:
     tjr_hours: { filters: { trade_hours_utc: [13, 21] } }                    # only trade 13:00-21:00 UTC (US daytime; a guess to test, not picked from our data)
     tjr: { entry: { wait_dip_pct: 10, wait_s: 120 }, exit: { partial_take_pct: 25, partial_sell_frac: 0.5 },
            filters: { trade_hours_utc: [13, 21] } }
+    # "DAY TRADING Explained in 11 Minutes" (QBTS short): risk and targets fixed before the entry, about 3.4 : 1.
+    # His 2nd target was the prior lows; +50% here is a guess at "about twice the first".
+    rr_plan: { exit: { stop_loss_pct: 7, partial_take_pct: 24, partial_sell_frac: 0.5, take_profit_pct: 50 } }  # stop -7%; +24%: sell half, the rest can't turn into a loss; +50%: sell the rest
 
 notifier:
   watch_services: [collector, trader, brain]  # alert if one of these stops reporting
