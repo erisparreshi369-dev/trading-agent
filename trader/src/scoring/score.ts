@@ -100,8 +100,10 @@ export function scoreWallets(
     extraSlippageBps: paper.extra_slippage_bps,
     tokenAccountRentSol: paper.token_account_rent_sol,
   };
+  // judge a wallet by what copying it would earn with OUR exits (leader sell and/or trailing stop, as configured)
   const exitRule: ExitRule = {
-    leaderExit: paper.follow_leader_exit, stopLossPct: RISK.STOP_LOSS_PCT, takeProfitPct: null, trailingStopPct: null, maxHoldMs: RISK.TIME_EXIT_MS,
+    leaderExit: paper.follow_leader_exit, stopLossPct: RISK.STOP_LOSS_PCT, takeProfitPct: null,
+    trailingStopPct: paper.trailing_stop_pct === null ? null : paper.trailing_stop_pct / 100, maxHoldMs: RISK.TIME_EXIT_MS,
   };
 
   const tracked = new Set((db.prepare("SELECT wallet FROM tracked_wallets WHERE active = 1").all() as { wallet: string }[]).map((r) => r.wallet));

@@ -42,7 +42,8 @@ const OUTCOME_HORIZON_MS = 30 * 60_000;
 
 export function resolveVariants(cfg: Config): Variant[] {
   const base: ExitRule = {
-    leaderExit: cfg.paper.follow_leader_exit, stopLossPct: RISK.STOP_LOSS_PCT, takeProfitPct: null, trailingStopPct: null, maxHoldMs: RISK.TIME_EXIT_MS,
+    leaderExit: cfg.paper.follow_leader_exit, stopLossPct: RISK.STOP_LOSS_PCT, takeProfitPct: null,
+    trailingStopPct: cfg.paper.trailing_stop_pct === null ? null : cfg.paper.trailing_stop_pct / 100, maxHoldMs: RISK.TIME_EXIT_MS,
     breakevenAfterPct: null, cutIfFlatMs: null, partialTakePct: null, partialSellFrac: 0.5,
   };
   return Object.entries(cfg.shadow.variants).map(([name, v]) => {

@@ -9,18 +9,19 @@ import { RiskManager } from "../src/risk/risk-manager.js";
 import { simulateBuy, simulateSell, stateFromTrade, type CostModel } from "../src/sim/market.js";
 import { clock, Curve, key, memDb, testConfig } from "./helpers.js";
 
-const cfg = testConfig().paper; // 1 SOL, 1500ms delay, the shipped cost model
+// 1 SOL, 1500ms delay, the shipped cost model; exits one rule at a time (the trailing stop has its own tests)
+const cfg = { ...testConfig().paper, follow_leader_exit: true, trailing_stop_pct: null };
 const costs: CostModel = {
   priorityFeeSol: cfg.priority_fee_sol, executorFeeBps: cfg.executor_fee_bps,
   extraSlippageBps: cfg.extra_slippage_bps, tokenAccountRentSol: cfg.token_account_rent_sol,
 };
 
-function setup() {
+function setup(paper = cfg) {
   const db = memDb();
   const c = clock();
   const killFile = join(mkdtempSync(join(tmpdir(), "kill-")), "KILL");
   const risk = new RiskManager(db, killFile, c.now);
-  const engine = new PaperEngine(db, cfg, risk, c.now);
+  const engine = new PaperEngine(db, paper, risk, c.now);
   engine.init();
   const curve = new Curve(db, key(), key(), c.t - 60_000).insertToken();
   const leader = key();
@@ -162,8 +163,8 @@ describe("PaperEngine accounting", () => {
 });
 
 describe("PaperEngine exits", () => {
-  function opened() {
-    const s = setup();
+  function opened(paper = cfg) {
+    const s = setup(paper);
     leaderBuys(s);
     s.c.advance(cfg.execution_delay_ms + INGEST_MARGIN_MS);
     s.engine.tick();
@@ -183,6 +184,29 @@ describe("PaperEngine exits", () => {
     s.engine.tick();
     expect(pos(s.db)).toMatchObject({ status: "closed", exit_reason: "stop_loss" });
     expect(pos(s.db).pnl_sol!).toBeLessThan(-0.005);
+  });
+
+  it("trailing stop: holds while the price climbs, sells once it falls 20% below its best", () => {
+    const s = opened({ ...cfg, follow_leader_exit: false, trailing_stop_pct: 20 });
+    feed(s, () => s.curve.movePrice(3, s.c.t + 100)); // 3x: ride it
+    feed(s, () => s.curve.movePrice(0.85, s.c.t + 200)); // -15% from the top: still holding
+    feed(s, () => s.curve.sell(s.leader, 1e12, s.c.t + 250)); // the leader selling doesn't matter now
+    expect(pos(s.db).exit_trigger).toBeNull();
+    const at = s.c.t + 300;
+    feed(s, () => s.curve.movePrice(0.9, at)); // ~-23.5% from the top
+    expect(pos(s.db)).toMatchObject({ exit_trigger: "trailing_stop", exit_due_at: at + cfg.execution_delay_ms });
+    s.c.t = at + cfg.execution_delay_ms + INGEST_MARGIN_MS;
+    s.engine.tick();
+    expect(pos(s.db)).toMatchObject({ status: "closed", exit_reason: "trailing_stop" });
+    expect(pos(s.db).pnl_sol!).toBeGreaterThan(0.01); // most of the run kept
+  });
+
+  it("trailing stop also cuts a loser that never went up, before the hard stop loss", () => {
+    const s = opened({ ...cfg, follow_leader_exit: false, trailing_stop_pct: 20 });
+    const entry = pos(s.db).entry_price!;
+    feed(s, () => s.curve.movePrice(0.8, s.c.t + 100));
+    expect(s.curve.price).toBeGreaterThan(entry * (1 - RISK.STOP_LOSS_PCT));
+    expect(pos(s.db).exit_trigger).toBe("trailing_stop");
   });
 
   it("time exit after 30 minutes", () => {

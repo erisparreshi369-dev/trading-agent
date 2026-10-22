@@ -38,7 +38,7 @@ LATE_BPS = 200
 CHASE_SOL_PER_MIN = 30
 GAVE_BACK_PEAK = 0.30
 DUMP_S = 30
-EXIT_WORDS = {"leader_exit": "the trader sold", "stop_loss": "stop loss", "time_exit": "time limit", "kill_switch": "emergency stop"}
+EXIT_WORDS = {"leader_exit": "the trader sold", "stop_loss": "stop loss", "trailing_stop": "fell 20% from its best", "time_exit": "time limit", "kill_switch": "emergency stop"}
 
 
 def trades(c: sqlite3.Connection, since: int, until: int) -> list[dict]:

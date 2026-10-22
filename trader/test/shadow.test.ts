@@ -25,10 +25,11 @@ class FakeInfo implements TokenInfoSource {
 
 type Variants = Config["shadow"]["variants"];
 
-function setup(variants: Variants) {
+function setup(variants: Variants, paper: Partial<Config["paper"]> = {}) {
   const db = memDb();
   const c = clock();
-  const cfg = testConfig({ shadow: { enabled: true, size_sol: 0.02, variants } });
+  // the exits these tests were written for: follow the leader, no trailing stop (variants override them)
+  const cfg = testConfig({ shadow: { enabled: true, size_sol: 0.02, variants }, paper: { follow_leader_exit: true, trailing_stop_pct: null, ...paper } });
   const info = new FakeInfo();
   const trader = new Trader(db, cfg, info, join(mkdtempSync(join(tmpdir(), "k-")), "KILL"), c.now);
   trader.paper.init();
@@ -91,6 +92,23 @@ describe("shadow variants", () => {
       expect(fills.pr).toBeCloseTo(2 * s.cfg.paper.priority_fee_sol, 12);
       expect(fills.r).toBeCloseTo(0, 12); // rent comes back
       expect(fills.sl).toBeCloseTo(sh.slippage_sol, 12);
+    } finally {
+      await s.trader.stop();
+    }
+  });
+
+  it("with the trailing stop live, the 'live' variant still sells at the same moment and price as the real trade", async () => {
+    const s = setup({ live: {} }, { follow_leader_exit: false, trailing_stop_pct: 20 });
+    try {
+      await scenario(s, (at, t0, tokens) => {
+        at(20_000, () => s.curve.movePrice(2, t0 + 20_000));
+        at(30_000, () => s.curve.sell(s.leader, tokens, t0 + 30_000)); // ignored now
+        at(60_000, () => s.curve.movePrice(0.7, t0 + 60_000)); // -30% from the top
+      });
+      const paper = s.db.prepare("SELECT pnl_sol, opened_at, closed_at, exit_reason FROM paper_positions").get() as Record<string, number | string>;
+      expect(paper.exit_reason).toBe("trailing_stop");
+      expect(s.shadow("live")).toMatchObject({ status: "closed", exit_reason: "trailing_stop", entry_at: paper.opened_at, exit_at: paper.closed_at });
+      expect(s.shadow("live").pnl_sol).toBeCloseTo(paper.pnl_sol as number, 12);
     } finally {
       await s.trader.stop();
     }
@@ -342,7 +360,8 @@ describe("shadow config", () => {
     const live = vs.find((v) => v.name === "live")!;
     expect(live.filters).toEqual(cfg.signals);
     expect(live.exit).toEqual({
-      leaderExit: true, stopLossPct: RISK.STOP_LOSS_PCT, takeProfitPct: null, trailingStopPct: null, maxHoldMs: RISK.TIME_EXIT_MS, breakevenAfterPct: null, cutIfFlatMs: null,
+      leaderExit: cfg.paper.follow_leader_exit, stopLossPct: RISK.STOP_LOSS_PCT, takeProfitPct: null,
+      trailingStopPct: cfg.paper.trailing_stop_pct === null ? null : cfg.paper.trailing_stop_pct / 100, maxHoldMs: RISK.TIME_EXIT_MS, breakevenAfterPct: null, cutIfFlatMs: null,
       partialTakePct: null, partialSellFrac: 0.5,
     });
     expect(live.entry).toBeNull();

@@ -65,6 +65,7 @@ TRADES_TO_JUDGE = 50  # same as TRADES_TO_JUDGE in trader/src/notifier/messages.
 EXITS = {
     "leader_exit": "the wallet we copied sold",
     "stop_loss": "stop loss (price fell 25% below what we paid)",
+    "trailing_stop": "price fell 20% below its best since we bought",
     "time_exit": "held for the 30-minute maximum",
     "kill_switch": "trading was halted",
 }

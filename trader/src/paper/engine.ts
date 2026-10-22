@@ -173,7 +173,11 @@ export class PaperEngine {
         this.db.prepare("UPDATE paper_positions SET last_price = ?, last_price_at = ?, peak_price = MAX(COALESCE(peak_price, 0), ?) WHERE id = ?")
           .run(t.price_sol, t.received_at, t.price_sol, p.id);
         const hard = this.risk.checkExit({ entryPrice: p.entry_price!, openedAt: p.opened_at! }, t.price_sol);
+        // let winners run: sell once the price falls trailing_stop_pct below its best since our buy (same rule as sim/follow.ts)
+        const peak = Math.max(p.peak_price ?? 0, p.entry_price!, t.price_sol);
+        const trail = this.cfg.trailing_stop_pct;
         if (hard === "stop_loss") this.triggerExit(p, "stop_loss", t.received_at);
+        else if (trail !== null && t.price_sol <= peak * (1 - trail / 100)) this.triggerExit(p, "trailing_stop", t.received_at);
       }
       if (this.cfg.follow_leader_exit && t.wallet === p.leader_wallet && !t.is_buy) {
         if (p.status === "open") this.triggerExit(p, "leader_exit", t.received_at);

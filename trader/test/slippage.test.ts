@@ -8,7 +8,7 @@ import { RiskManager } from "../src/risk/risk-manager.js";
 import { maxSlippageBps, stricterOnly } from "../src/lib/safe-settings.js";
 import { clock, Curve, key, memDb, testConfig } from "./helpers.js";
 
-const cfg = testConfig().paper;
+const cfg = { ...testConfig().paper, follow_leader_exit: true, trailing_stop_pct: null }; // exits via the leader selling
 const pos = (db: DB) => db.prepare("SELECT * FROM paper_positions ORDER BY id DESC LIMIT 1").get() as Position;
 const lastFill = (db: DB) => db.prepare("SELECT * FROM paper_fills ORDER BY id DESC LIMIT 1").get() as { side: string; ok: number; slippage_bps: number; reason: string; price: number };
 

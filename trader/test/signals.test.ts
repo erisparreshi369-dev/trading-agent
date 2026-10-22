@@ -30,7 +30,7 @@ function setup(over: Partial<SignalsConfig> = {}, info = new FakeInfo(), shadow 
   const db = memDb();
   const c = clock();
   // shadow variants off unless a test is about them: looser variants legitimately spend RPC credits
-  const cfg = testConfig({ signals: over, shadow: { enabled: shadow } });
+  const cfg = testConfig({ signals: over, shadow: { enabled: shadow }, paper: { follow_leader_exit: true, trailing_stop_pct: null } }); // exits via the leader selling
   const trader = new Trader(db, cfg, info, join(mkdtempSync(join(tmpdir(), "k-")), "KILL"), c.now);
   trader.paper.init();
   const curve = new Curve(db, key(), key(), c.t - 60_000).insertToken({ initial_buy_tokens: 30_000_000_000_000 });

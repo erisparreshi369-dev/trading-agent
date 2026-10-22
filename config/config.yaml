@@ -120,7 +120,11 @@ paper:
   # we always exit, and the slippage is logged. The learner may lower this, never raise it.
   max_slippage_bps: 300         # 3%
   token_account_rent_sol: 0.00203928  # paid on first buy, refunded when the account is closed on exit
-  follow_leader_exit: true      # sell when the leader sells
+  # Cut losers fast, let winners run (owner's choice 2026-10-22, from the trail_20 variant): don't sell
+  # when the leader sells; sell once the price is 20% below its best since our buy. The hard stop loss
+  # and the 30-min time limit still apply. The follow_leader variant keeps measuring the old way.
+  follow_leader_exit: false     # true = sell when the leader sells
+  trailing_stop_pct: 20         # null = off
 
 shadow:
   # Every signal is also paper-traded under each variant below, in parallel, at a fixed size and
@@ -144,6 +148,7 @@ shadow:
     tp_100: { exit: { take_profit_pct: 100 } }
     trail_20: { exit: { leader_exit: false, trailing_stop_pct: 20 } }
     trail_35: { exit: { leader_exit: false, trailing_stop_pct: 35 } }
+    follow_leader: { exit: { leader_exit: true, trailing_stop_pct: null } }   # the exits before 2026-10-22: sell when the leader sells
     hold_1m: { exit: { leader_exit: false, max_hold_s: 60 } }
     hold_5m: { exit: { leader_exit: false, max_hold_s: 300 } }
     buy_0.05: { filters: { min_leader_buy_sol: 0.05 } }
