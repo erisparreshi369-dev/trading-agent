@@ -59,6 +59,7 @@ FEATURES: list[dict] = [
     {"name": "creator_launches", "kind": "log"},
     {"name": "creator_success_rate", "kind": "num"},
     {"name": "early_buyer_score", "kind": "num"},
+    {"name": "creator_record_age_h", "kind": "log"},
     {"name": "leader_is_dev", "kind": "bool"},
     {"name": "mayhem", "kind": "bool"},
     {"name": "token_known", "kind": "bool"},
