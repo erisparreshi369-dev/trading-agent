@@ -237,12 +237,12 @@ brain:
   # remembers every model and lesson in the database, and writes what it learned. It may make the
   # bot skip a signal only after passing an exam on signals it never trained on, re-taken every study:
   min_signals: 200          # studied signals with a known outcome, before it may take the exam
-  min_test_trades: 30       # trades the normal rules took inside the newest test_share of signals
-  test_share: 0.3           # newest 30% held out as the exam; it trains on the older 70%
-  min_gain: 0.02            # trades it keeps must beat all the rules' trades by 2 points of ROI on average...
-  min_kept: 10              # ...while keeping at least this many test trades...
-  skip_below_roi: 0.0       # ...and it skips a signal when its predicted follower ROI is below this
-  ridge: 10                 # how hard it resists over-fitting few examples (bigger = more careful)
+  min_test_trades: 20       # trades the normal rules took inside the newest test_share of signals
+  test_share: 0.25          # newest 25% held out as the exam; it trains on the older 75% (more train, enough test)
+  min_gain: 0.01            # trades it keeps must beat all the rules' trades by 1 point of ROI on average...
+  min_kept: 5               # ...while keeping at least this many test trades...
+  skip_below_roi: -0.04     # it skips a signal when its predicted follower ROI is below -4% (skip predicted losers)
+  ridge: 2                  # how hard it resists over-fitting few examples (smaller = more flexible)
   lesson_min_n: 15          # a lesson needs this many signals on each side
   lesson_min_diff: 0.02     # ...and a difference of at least 2 points to count as "better" or "worse"
   own_skips_min: 10         # once it really skipped this many signals, they must have lost money on average, or it fails the exam

@@ -15,8 +15,8 @@ sys.path.insert(0, str(ROOT / "shared"))
 import brain  # noqa: E402
 from migrate import migrate  # noqa: E402
 
-CFG = {"min_signals": 200, "min_test_trades": 30, "test_share": 0.3, "min_gain": 0.02, "min_kept": 10,
-       "skip_below_roi": 0.0, "ridge": 10.0, "lesson_min_n": 15, "lesson_min_diff": 0.02, "own_skips_min": 10, "use_brain": True}
+CFG = {"min_signals": 200, "min_test_trades": 20, "test_share": 0.25, "min_gain": 0.01, "min_kept": 5,
+       "skip_below_roi": -0.04, "ridge": 2.0, "lesson_min_n": 15, "lesson_min_diff": 0.02, "own_skips_min": 10, "use_brain": True}
 
 
 def signal(i: int, dev_sold: float, roi: float, taken: bool = True) -> dict:
@@ -185,7 +185,7 @@ class BrainTest(unittest.TestCase):
         cfg = brain.load_config()
         self.assertEqual(cfg["min_signals"], 200)
         self.assertTrue(cfg["use_brain"])
-        self.assertEqual(cfg["skip_below_roi"], 0.0)
+        self.assertEqual(cfg["skip_below_roi"], -0.04)
 
 
 if __name__ == "__main__":
