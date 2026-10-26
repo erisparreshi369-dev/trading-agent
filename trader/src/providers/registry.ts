@@ -13,7 +13,9 @@ export interface Provider {
  */
 export function providersFrom(cfg: ProvidersConfig, env: NodeJS.ProcessEnv = process.env): Map<ProviderName, Provider> {
   const out = new Map<ProviderName, Provider>();
-  for (const [name, p] of Object.entries(cfg.list) as [ProviderName, ProvidersConfig["list"][ProviderName]][]) {
+  const list = cfg.list as Record<ProviderName, ProvidersConfig["list"][ProviderName]>;
+  for (const name of Object.keys(list) as ProviderName[]) {
+    const p = list[name];
     if (!p) continue;
     const key = env[p.key_env]?.trim();
     if (!key) continue;

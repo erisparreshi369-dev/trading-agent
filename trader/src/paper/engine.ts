@@ -134,7 +134,7 @@ export class PaperEngine {
   }
 
   /** A tracked wallet bought and the signal engine accepted it. Risk decides if and how much. */
-  enter(signalId: number, leader: { mint: string; wallet: string; venue: string; received_at: number; price_sol: number }): EntryDecision {
+  async enter(signalId: number, leader: { mint: string; wallet: string; venue: string; received_at: number; price_sol: number }): Promise<EntryDecision> {
     const { balance, start } = this.account();
     const live = this.live();
     if (live.some((p) => p.mint === leader.mint)) return { ok: false, reason: "already in this token" };
@@ -147,7 +147,7 @@ export class PaperEngine {
     const entriesToday = (this.db.prepare("SELECT count(*) n FROM paper_positions WHERE entry_due_at >= ?").get(dayStart) as { n: number }).n;
     const leaderRecentEntries = (this.db.prepare(`SELECT count(*) n FROM (SELECT leader_wallet FROM paper_positions WHERE status != 'failed'
       ORDER BY id DESC LIMIT ?) WHERE leader_wallet = ?`).get(this.risk.limits.WALLET_SHARE_WINDOW, leader.wallet) as { n: number }).n;
-    const decision = this.risk.checkEntry({ equity: this.equity(), freeBalance: balance, startBalance: start, openPositions: live.length, entriesToday, leaderRecentEntries });
+    const decision = await this.risk.checkEntry({ equity: this.equity(), freeBalance: balance, startBalance: start, openPositions: live.length, entriesToday, leaderRecentEntries });
     if (!decision.ok) return decision;
 
     const due = leader.received_at + this.cfg.execution_delay_ms;

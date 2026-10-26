@@ -164,7 +164,7 @@ export class SignalEngine {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(this.now(), t.wallet, t.mint, t.id, t.venue, score, decision, JSON.stringify(reasons), JSON.stringify(f)).lastInsertRowid);
 
     if (decision === "enter") {
-      const risk = this.paper.enter(signalId, { mint: t.mint, wallet: t.wallet, venue: t.venue, received_at: t.received_at, price_sol: t.price_sol! });
+      const risk = await this.paper.enter(signalId, { mint: t.mint, wallet: t.wallet, venue: t.venue, received_at: t.received_at, price_sol: t.price_sol! });
       if (!risk.ok) {
         decision = "risk_block";
         reasons.push(`risk: ${risk.reason}`);

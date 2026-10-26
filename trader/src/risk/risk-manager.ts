@@ -3,6 +3,7 @@ import type { DB } from "../lib/db.js";
 import { log } from "../lib/log.js";
 import { RISK, type RiskLimits } from "./limits.js";
 import { nextSizeBase, type Results, type SizeBase } from "./size-base.js";
+import { getKellySize } from "./kelly.js";
 
 export type EntryDecision = { ok: true; sizeSol: number } | { ok: false; reason: string };
 
@@ -86,7 +87,7 @@ export class RiskManager {
     return this.state().halted_day === utcDay(this.now());
   }
 
-  checkEntry(a: AccountSnapshot): EntryDecision {
+  async checkEntry(a: AccountSnapshot): Promise<EntryDecision> {
     this.tick(a);
     const kill = this.isKilled();
     if (kill.killed) return { ok: false, reason: `kill switch: ${kill.reason}` };
@@ -98,7 +99,12 @@ export class RiskManager {
     if (a.leaderRecentEntries >= maxPerLeader) {
       return { ok: false, reason: `leader has ${a.leaderRecentEntries} of our last ${L.WALLET_SHARE_WINDOW} entries (max ${maxPerLeader})` };
     }
-    const size = Math.min(Math.min(a.equity, this.sizeBase().base) * L.MAX_POSITION_PCT, L.MAX_POSITION_SOL);
+    // Kelly sizing (blended with proven balance)
+    const minPct = L.MIN_POSITION_SOL / Math.max(a.equity, 0.01);
+    const kelly = await getKellySize(this.db, a.equity, { maxPositionPct: L.MAX_POSITION_PCT, minPositionPct: minPct });
+    const provenSize = Math.min(Math.min(a.equity, this.sizeBase().base) * L.MAX_POSITION_PCT, L.MAX_POSITION_SOL);
+    // Blend: use the smaller of Kelly and proven balance (more conservative)
+    const size = Math.min(kelly.sizeSol, provenSize);
     if (size < L.MIN_POSITION_SOL) return { ok: false, reason: `position size ${size.toFixed(4)} below minimum ${L.MIN_POSITION_SOL}` };
     if (a.freeBalance - size < L.MIN_FREE_BALANCE_SOL) return { ok: false, reason: "free balance would drop below reserve" };
     return { ok: true, sizeSol: size };
