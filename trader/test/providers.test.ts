@@ -7,7 +7,7 @@ import { clock, testConfig } from "./helpers.js";
 const cfg = testConfig().providers;
 const H = cfg.health; // 3 errors, 10s timeout, 60s silence, 90% budget, 120s switch back
 
-function setup(order = ["helius", "drpc", "ankr"] as ("helius" | "drpc" | "ankr")[]) {
+function setup(order = ["helius", "drpc", "ankr", "quicknode", "alchemy", "shyft", "triton", "chainstack", "public"] as ProviderName[]) {
   const c = clock();
   const health = new ProviderHealth(H, c.now);
   const switches: Switch[] = [];
@@ -16,7 +16,7 @@ function setup(order = ["helius", "drpc", "ankr"] as ("helius" | "drpc" | "ankr"
   c.advance(H.switch_back_after_healthy_s * 1000); // everyone has been healthy for a while
   return { c, health, r, switches };
 }
-const fail = (h: ProviderHealth, p: "helius" | "drpc" | "ankr", n = H.errors_in_a_row) => {
+const fail = (h: ProviderHealth, p: ProviderName, n = H.errors_in_a_row) => {
   for (let i = 0; i < n; i++) h.error(p, "boom");
 };
 

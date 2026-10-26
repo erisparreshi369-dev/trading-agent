@@ -201,10 +201,10 @@ const NotifierSchema = z
   })
   .strict();
 
-const ProviderName = z.enum(["helius", "drpc", "ankr", "quicknode"]);
+const ProviderName = z.enum(["helius", "drpc", "ankr", "quicknode", "alchemy", "shyft", "triton", "chainstack", "public"]);
 const ProvidersSchema = z
   .object({
-    list: z.record(ProviderName, z.object({ key_env: z.string().regex(/^[A-Z][A-Z0-9_]*$/), ws: z.string().url(), http: z.string().url() }).strict()),
+    list: z.record(ProviderName, z.object({ key_env: z.string().optional().refine((v) => !v || /^[A-Z][A-Z0-9_]*$/.test(v)), ws: z.string().url(), http: z.string().url() }).strict()),
     jobs: z
       .object(Object.fromEntries((["following", "discovery", "lookups", "history"] as const).map((j) => [j,
         z.object({ use: z.array(ProviderName).min(1), mode: z.enum(["failover"]) }).strict()])) as Record<"following" | "discovery" | "lookups" | "history", z.ZodObject<{ use: z.ZodArray<typeof ProviderName>; mode: z.ZodEnum<["failover"]> }>>)
