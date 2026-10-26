@@ -7,9 +7,9 @@ collector:
   helius:
     # Every Helius websocket byte is metered (20 credits/MB). Helius's real limit is per MONTH
     # (Free: 1M credits); when it's used up Helius refuses everything until the month resets.
-    # This is OUR per-UTC-day share of it: 1500 MB = 30k credits/day = 930k/month, leaving room
+    # This is OUR per-UTC-day share of it: 3000 MB = 60k credits/day = 1.86M/month, leaving room
     # for RPC calls. Developer plan (10M/month): ~15000. Measured full firehose: ~35 GB/day.
-    daily_mb_cap: 1500
+    daily_mb_cap: 3000
     # The dashboard can raise the daily cap (stored in the database until you change it back).
     # Whatever the cap, a monthly guard holds: over any 31 days the streams never use more than
     # stream_share of monthly_credits (the rest stays for RPC calls), so the plan's monthly credits
