@@ -108,6 +108,13 @@ export class SignalEngine {
         ? (this.db.prepare("SELECT count(*) n FROM tokens WHERE creator = ? AND created_at > ?").get(tok.creator, this.now() - 86_400_000) as { n: number }).n
         : null;
       f.leader_is_dev = tok.creator === t.wallet;
+      // holder count: how many unique wallets hold this token
+      const hc = this.db.prepare("SELECT count(DISTINCT wallet) n FROM token_holders WHERE mint = ?").get(t.mint) as { n: number } | undefined;
+      f.holder_count = hc?.n ?? null;
+      // hours since token creation (recency signal)
+      f.hours_since_creation = +((t.received_at - tok.created_at) / 3_600_000).toFixed(2);
+      // has liquidity: pool has real SOL reserves
+      f.has_liquidity = (t.venue === "curve" ? (t.real_sol_reserves ?? 0) : (t.v_sol_reserves ?? 0)) > 0;
     }
     Object.assign(f, this.storedIntel(t.mint, tok?.creator ?? null));
     const liquidity = t.venue === "curve" ? (t.real_sol_reserves ?? 0) / 1e9 : (t.v_sol_reserves ?? 0) / 1e9;

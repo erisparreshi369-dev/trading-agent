@@ -64,6 +64,9 @@ FEATURES: list[dict] = [
     {"name": "mayhem", "kind": "bool"},
     {"name": "token_known", "kind": "bool"},
     {"name": "venue", "kind": "eq", "value": "amm"},
+    {"name": "holder_count", "kind": "log"},
+    {"name": "hours_since_creation", "kind": "log"},
+    {"name": "has_liquidity", "kind": "bool"},
 ]
 FEATURES += [{"name": f"{f['name']}_missing", "kind": "missing", "of": f["name"]} for f in FEATURES if f["kind"] in ("num", "log")]
 

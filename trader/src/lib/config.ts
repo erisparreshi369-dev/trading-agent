@@ -201,7 +201,7 @@ const NotifierSchema = z
   })
   .strict();
 
-const ProviderName = z.enum(["helius", "drpc", "ankr"]);
+const ProviderName = z.enum(["helius", "drpc", "ankr", "quicknode"]);
 const ProvidersSchema = z
   .object({
     list: z.record(ProviderName, z.object({ key_env: z.string().regex(/^[A-Z][A-Z0-9_]*$/), ws: z.string().url(), http: z.string().url() }).strict()),
